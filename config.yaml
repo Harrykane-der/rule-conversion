@@ -1,3 +1,103 @@
+- path: output/game.mrs
+  format: mrs
+  behavior: domain
+  upstream: &game_upstream
+    game:
+      type: http
+      url: https://github.com/Harrykane-der/mihomo-rules/raw/refs/heads/main/game.yaml
+      format: yaml
+      behavior: domain
+
+- path: output/game.yaml
+  format: yaml
+  behavior: classical
+  upstream: *game_upstream
+
+- path: output/game.json
+  format: json
+  behavior: sing-box
+  upstream: *game_upstream
+
+- path: output/game.srs
+  format: srs
+  behavior: sing-box
+  upstream: *game_upstream
+  
+- path: output/direct_emby.mrs
+  format: mrs
+  behavior: domain
+  upstream: &direct_emby_upstream
+    direct_emby:
+      type: http
+      url: https://github.com/Harrykane-der/mihomo-rules/raw/refs/heads/main/direct_emby.yaml
+      format: yaml
+      behavior: domain
+
+- path: output/direct_emby.yaml
+  format: yaml
+  behavior: classical
+  upstream: *direct_emby_upstream
+
+- path: output/direct_emby.json
+  format: json
+  behavior: sing-box
+  upstream: *direct_emby_upstream
+
+- path: output/direct_emby.srs
+  format: srs
+  behavior: sing-box
+  upstream: *direct_emby_upstream
+  
+- path: output/proxy_emby.mrs
+  format: mrs
+  behavior: domain
+  upstream: &proxy_emby_upstream
+    proxy_emby:
+      type: http
+      url: https://github.com/Harrykane-der/mihomo-rules/raw/refs/heads/main/proxy_emby.yaml
+      format: yaml
+      behavior: domain
+
+- path: output/proxy_emby.yaml
+  format: yaml
+  behavior: classical
+  upstream: *proxy_emby_upstream
+
+- path: output/proxy_emby.json
+  format: json
+  behavior: sing-box
+  upstream: *proxy_emby_upstream
+
+- path: output/proxy_emby.srs
+  format: srs
+  behavior: sing-box
+  upstream: *proxy_emby_upstream
+  
+- path: output/ad.mrs
+  format: mrs
+  behavior: domain
+  upstream: &ad_upstream
+    ad:
+      type: http
+      url: https://github.com/Harrykane-der/mihomo-rules/raw/refs/heads/main/ad.yaml
+      format: yaml
+      behavior: domain
+
+- path: output/ad.yaml
+  format: yaml
+  behavior: classical
+  upstream: *ad_upstream
+
+- path: output/ad.json
+  format: json
+  behavior: sing-box
+  upstream: *ad_upstream
+
+- path: output/ad.srs
+  format: srs
+  behavior: sing-box
+  upstream: *ad_upstream
+
 # reject
 - path: output/reject.mrs
   format: mrs
