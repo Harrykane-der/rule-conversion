@@ -75,7 +75,7 @@
   
 - path: output/ad.mrs
   format: mrs
-  behavior:domain 
+  behavior: domain 
   upstream: &ad_upstream
     ad:
       type: http
