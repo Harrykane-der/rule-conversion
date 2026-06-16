@@ -81,7 +81,7 @@
       type: http
       url: https://github.com/Harrykane-der/mihomo-rules/raw/refs/heads/main/ad.yaml
       format: yaml
-      behavior: domain
+      behavior: classical
 
 - path: output/ad.yaml
   format: yaml
