@@ -71,84 +71,59 @@
 - path: output/proxy_emby.srs
   format: srs
   behavior: sing-box
-  upstream: *proxy_emby_upstream
-  
-- path: output/ad.mrs
-  format: mrs
-  behavior: domain 
-  upstream: &ad_upstream
-    ad:
-      type: http
-      url: https://github.com/Harrykane-der/mihomo-rules/raw/refs/heads/main/ad.yaml
-      format: yaml
-      behavior: domain
+  upstream: *proxy_emby_upstream  
 
-- path: output/ad.yaml
-  format: yaml
-  behavior: classical
-  upstream: *ad_upstream
-
-- path: output/ad.json
-  format: json
-  behavior: sing-box
-  upstream: *ad_upstream
-
-- path: output/ad.srs
-  format: srs
-  behavior: sing-box
-  upstream: *ad_upstream
-
-# reject
-- path: output/reject.mrs
+# ablock
+- path: output/ablock.mrs
   format: mrs
   behavior: domain
-  upstream: &reject_upstream
+  upstream: &ablock_upstream
     xndeye_reject:
       type: http
       url: https://raw.githubusercontent.com/xndeye/adblock_list/refs/heads/release/clash.yaml
       format: yaml
       behavior: domain
 
-- path: output/reject.yaml
+- path: output/ablock.yaml
   format: yaml
   behavior: classical
-  upstream: *reject_upstream
+  upstream: *ablock_upstream
 
-- path: output/reject.json
+- path: output/ablock.json
   format: json
   behavior: sing-box
-  upstream: *reject_upstream
+  upstream: *ablock_upstream
 
-- path: output/reject.srs
+- path: output/ablock.srs
   format: srs
   behavior: sing-box
-  upstream: *reject_upstream
+  upstream: *ablock_upstream
 
 # reject@ip
-- path: output/reject@ip.mrs
+- path: output/ablock@ip.mrs
   format: mrs
   behavior: ipcidr
-  upstream: &reject_ip_upstream
+  upstream: &ablock_ip_upstream
     skk_reject_ip:
       type: http
       url: https://ruleset.skk.moe/Clash/ip/reject.txt
       format: text
       behavior: classical
 
-- path: output/reject@ip.yaml
+- path: output/ablock@ip.yaml
   format: yaml
   behavior: classical
-  upstream: *reject_ip_upstream
+  upstream: *ablock_ip_upstream
 
-- path: output/reject@ip.json
+- path: output/ablock@ip.json
   format: json
   behavior: sing-box
-  upstream: *reject_ip_upstream
+  upstream: *ablock_ip_upstream
 
-- path: output/reject@ip.srs
+- path: output/ablock@ip.srs
   format: srs
   behavior: sing-box
-  upstream: *reject_ip_upstream
+  upstream: *ablock_ip_upstream
 
 # direct
 - path: output/direct.mrs
