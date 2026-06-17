@@ -100,7 +100,7 @@
   upstream: *ablock_upstream
 
 # reject@ip
-- path: output/ablock@ip.mrs
+- path: output/ablock_ip.mrs
   format: mrs
   behavior: ipcidr
   upstream: &ablock_ip_upstream
@@ -110,17 +110,17 @@
       format: text
       behavior: classical
 
-- path: output/ablock@ip.yaml
+- path: output/ablock_ip.yaml
   format: yaml
   behavior: classical
   upstream: *ablock_ip_upstream
 
-- path: output/ablock@ip.json
+- path: output/ablock_ip.json
   format: json
   behavior: sing-box
   upstream: *ablock_ip_upstream
 
-- path: output/ablock@ip.srs
+- path: output/ablock_ip.srs
   format: srs
   behavior: sing-box
   upstream: *ablock_ip_upstream
