@@ -80,7 +80,7 @@
   upstream: &ablock_upstream
     xndeye_reject:
       type: http
-      url: https://raw.githubusercontent.com/xndeye/adblock_list/refs/heads/release/clash.yaml
+      url: https://ruleset.skk.moe/Clash/domainset/reject.txt
       format: yaml
       behavior: domain
 
