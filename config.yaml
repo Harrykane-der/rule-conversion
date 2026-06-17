@@ -86,7 +86,7 @@
 
 - path: output/ablock.yaml
   format: yaml
-  behavior: classical
+  behavior: domain
   upstream: *ablock_upstream
 
 - path: output/ablock.json
