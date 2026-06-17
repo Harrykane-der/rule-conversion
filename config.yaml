@@ -81,7 +81,7 @@
     xndeye_reject:
       type: http
       url: https://ruleset.skk.moe/Clash/domainset/reject.txt
-      format: yaml
+      format: text
       behavior: domain
 
 - path: output/ablock.yaml
