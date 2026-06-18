@@ -88,6 +88,16 @@
       url: https://github.com/echs-top/proxy/raw/refs/heads/main/mrs/domain/ads.mrs
       format: mrs
       behavior: domain
+    adblock:
+      type: http
+      url: https://github.com/Harrykane-der/AdRules/raw/refs/heads/main/adrules-mihomo.mrs
+      format: mrs
+      behavior: domain
+    httpdns:
+      type: http
+      url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/httpdns.mrs
+      format: mrs
+      behavior: domain
 
 - path: output/ablock.yaml
   format: yaml
@@ -114,6 +124,11 @@
       url: https://ruleset.skk.moe/Clash/ip/reject.txt
       format: text
       behavior: classical
+    httpdns_ip:
+      type: http
+      url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/ipcidr/httpdns.mrs
+      format: mrs
+      behavior: ipcidr
 
 - path: output/ablock_ip.yaml
   format: yaml
@@ -590,6 +605,17 @@
       url: https://github.com/DustinWin/ruleset_geodata/releases/download/mihomo-ruleset/fakeip-filter.mrs
       format: mrs
       behavior: domain
+    QuixoticHeart_fake_ip_filter:
+      type: http
+      url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/fake-ip-filter.mrs
+      format: mrs
+      behavior: domain
+        DustinWin_fake_ip_filter:
+      type: http
+      url: https://github.com/Harrykane-der/mihomo-rules/raw/refs/heads/main/fakeip-filter.yaml
+      format: yaml
+      behavior: domain
+      
     
 
 - path: output/fakeip-filter.yaml
