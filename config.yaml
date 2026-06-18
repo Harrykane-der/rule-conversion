@@ -133,7 +133,7 @@
 - path: output/adblock_ip.yaml
   format: yaml
   behavior: classical
-  upstream: *ablock_ip_upstream
+  upstream: *adblock_ip_upstream
 
 - path: output/adblock_ip.json
   format: json
