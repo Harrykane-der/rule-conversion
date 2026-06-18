@@ -74,10 +74,10 @@
   upstream: *proxy_emby_upstream  
 
 # ablock
-- path: output/ablock.mrs
+- path: output/adblock.mrs
   format: mrs
   behavior: domain
-  upstream: &ablock_upstream
+  upstream: &adblock_upstream
     xndeye_reject:
       type: http
       url: https://ruleset.skk.moe/Clash/domainset/reject.txt
@@ -99,26 +99,26 @@
       format: mrs
       behavior: domain
 
-- path: output/ablock.yaml
+- path: output/adblock.yaml
   format: yaml
   behavior: domain
-  upstream: *ablock_upstream
+  upstream: *adblock_upstream
 
-- path: output/ablock.json
+- path: output/adblock.json
   format: json
   behavior: sing-box
-  upstream: *ablock_upstream
+  upstream: *adblock_upstream
 
-- path: output/ablock.srs
+- path: output/adblock.srs
   format: srs
   behavior: sing-box
-  upstream: *ablock_upstream
+  upstream: *adblock_upstream
 
 # reject@ip
-- path: output/ablock_ip.mrs
+- path: output/adblock_ip.mrs
   format: mrs
   behavior: ipcidr
-  upstream: &ablock_ip_upstream
+  upstream: &adblock_ip_upstream
     skk_reject_ip:
       type: http
       url: https://ruleset.skk.moe/Clash/ip/reject.txt
@@ -130,17 +130,17 @@
       format: mrs
       behavior: ipcidr
 
-- path: output/ablock_ip.yaml
+- path: output/adblock_ip.yaml
   format: yaml
   behavior: classical
   upstream: *ablock_ip_upstream
 
-- path: output/ablock_ip.json
+- path: output/adblock_ip.json
   format: json
   behavior: sing-box
   upstream: *ablock_ip_upstream
 
-- path: output/ablock_ip.srs
+- path: output/adblock_ip.srs
   format: srs
   behavior: sing-box
   upstream: *ablock_ip_upstream
