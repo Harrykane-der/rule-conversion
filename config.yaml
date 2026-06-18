@@ -610,7 +610,7 @@
       url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/fake-ip-filter.mrs
       format: mrs
       behavior: domain
-        DustinWin_fake_ip_filter:
+    Harrykane-der_fake_ip_filter:
       type: http
       url: https://github.com/Harrykane-der/mihomo-rules/raw/refs/heads/main/fakeip-filter.yaml
       format: yaml
