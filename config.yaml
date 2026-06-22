@@ -98,6 +98,11 @@
       url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/httpdns.mrs
       format: mrs
       behavior: domain
+    ads:
+      type: http
+      url: https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/reject-list.txt
+      format: text
+      behavior: domain
 
 - path: output/adblock.yaml
   format: yaml
