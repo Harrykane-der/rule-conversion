@@ -19,7 +19,11 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-DOMAIN_PATTERN = re.compile(r'^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$')
+# 支持 Clash 通配符域名：*.example.com、*.*.example.com、example.com 等
+DOMAIN_PATTERN = re.compile(
+    r'^(?:\*|\*\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)(?:\.(?:\*|[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?))*\( |^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)* \)'
+)
+
 MIHOMO_PATH = 'mihomo'
 SING_BOX_PATH = 'sing-box'
 SING_BOX_RULESET_VERSION = 5
@@ -225,6 +229,96 @@ class RulesMerger:
             return data
         return []
 
+    # ==================== 通配符优化核心函数 ====================
+
+    def _classical_to_domain(self, rule: str) -> Optional[str]:
+        parts = rule.split(',')
+        if len(parts) < 2:
+            return None
+        suffix = parts[0].strip()
+        domain = parts[1].strip()
+
+        if suffix == 'DOMAIN':
+            return domain if self._validate_domain_rule(domain) else None
+        elif suffix == 'DOMAIN-SUFFIX':
+            if domain.startswith('*.'):
+                return '+.' + domain[2:]
+            return '+.' + domain
+        return None
+
+    def _domain_to_classical(self, rule: str) -> Optional[str]:
+        if rule.startswith('+.'):
+            suffix = rule[2:]
+            if suffix.startswith('*.'):
+                return f"DOMAIN-SUFFIX,{suffix[2:]}"
+            return f"DOMAIN-SUFFIX,{suffix}"
+        elif rule.startswith('*.') or '*' in rule:
+            if rule.startswith('*.'):
+                return f"DOMAIN-SUFFIX,{rule[2:]}"
+            return f"DOMAIN,{rule}"
+        elif self._validate_domain_rule(rule):
+            return f"DOMAIN,{rule}"
+        return None
+
+    def _to_sing_box_item(self, rule: str, behavior: str) -> Optional[tuple]:
+        if behavior == 'domain':
+            if rule.startswith('+.'):
+                return 'domain_suffix', rule[2:]
+            if rule.startswith('*.'):
+                return 'domain_suffix', rule[2:]   # *.xboxlive.com → domain_suffix: xboxlive.com
+            return 'domain', rule
+        if behavior == 'ipcidr':
+            return 'ip_cidr', rule
+        if behavior != 'classical':
+            return None
+        parts = [part.strip() for part in rule.split(',')]
+        if len(parts) < 2:
+            return None
+        rule_type = parts[0]
+        value = parts[1]
+        mapping = {
+            'DOMAIN': 'domain',
+            'DOMAIN-SUFFIX': 'domain_suffix',
+            'DOMAIN-KEYWORD': 'domain_keyword',
+            'DOMAIN-REGEX': 'domain_regex',
+            'IP-CIDR': 'ip_cidr',
+            'IP-CIDR6': 'ip_cidr'
+        }
+        target_key = mapping.get(rule_type)
+        if not target_key:
+            return None
+        return target_key, value
+
+    def _validate_domain_rule(self, rule: str) -> Optional[str]:
+        if not rule:
+            return None
+        domain = rule[2:] if rule.startswith('+.') else rule
+        if DOMAIN_PATTERN.match(domain) or '*' in domain:
+            return rule
+        return None
+
+    def _validate_classical_rule(self, rule: str) -> Optional[str]:
+        try:
+            parts = rule.split(',')
+            if len(parts) < 2:
+                return None
+            rule_type = parts[0]
+            value = parts[1].strip()
+            rule = ','.join(part.strip() for part in parts)
+            if rule_type in {'DOMAIN', 'DOMAIN-SUFFIX'}:
+                if self._validate_domain_rule(value) or '*' in value:
+                    return rule
+                return None
+            elif rule_type == 'IP-CIDR':
+                return rule if self._get_ipcidr_version(value) == 4 else None
+            elif rule_type == 'IP-CIDR6':
+                return rule if self._get_ipcidr_version(value) == 6 else None
+            return rule
+        except:
+            return None
+
+    # ==================== 其余原有函数保持不变 ====================
+
     def _classical_to_ipcidr(self, rule: str) -> Optional[str]:
         parts = rule.split(',')
         if len(parts) < 2:
@@ -235,35 +329,12 @@ class RulesMerger:
             return None
         return self._validate_ipcidr_rule(ipcidr)
 
-    def _classical_to_domain(self, rule: str) -> Optional[str]:
-        parts = rule.split(',')
-        if len(parts) < 2:
-            return None
-        suffix = parts[0].strip()
-        domain = parts[1].strip()
-        if not DOMAIN_PATTERN.match(domain):
-            return None
-        if suffix == 'DOMAIN':
-            return domain
-        elif suffix == 'DOMAIN-SUFFIX':
-            return '+.' + domain
-        return None
-
     def _ipcidr_to_classical(self, rule: str) -> Optional[str]:
         ver = self._get_ipcidr_version(rule)
         if ver == 6:
             return "IP-CIDR6," + rule
         if ver == 4:
             return "IP-CIDR," + rule
-        return None
-
-    def _domain_to_classical(self, rule: str) -> Optional[str]:
-        if rule.startswith('+.'):
-            suffix = rule[2:]
-            if DOMAIN_PATTERN.match(suffix):
-                return f"DOMAIN-SUFFIX,{suffix}"
-        elif DOMAIN_PATTERN.match(rule):
-            return f"DOMAIN,{rule}"
         return None
 
     def _write_sing_box_source(self, output_path: str, rules: List[str], behavior: str, version: int = SING_BOX_RULESET_VERSION):
@@ -308,33 +379,6 @@ class RulesMerger:
 
         compact_rule = {k: sorted(set(v)) for k, v in merged.items() if v}
         return [compact_rule] if compact_rule else []
-
-    def _to_sing_box_item(self, rule: str, behavior: str) -> Optional[tuple]:
-        if behavior == 'domain':
-            if rule.startswith('+.'):
-                return 'domain_suffix', rule[2:]
-            return 'domain', rule
-        if behavior == 'ipcidr':
-            return 'ip_cidr', rule
-        if behavior != 'classical':
-            return None
-        parts = [part.strip() for part in rule.split(',')]
-        if len(parts) < 2:
-            return None
-        rule_type = parts[0]
-        value = parts[1]
-        mapping = {
-            'DOMAIN': 'domain',
-            'DOMAIN-SUFFIX': 'domain_suffix',
-            'DOMAIN-KEYWORD': 'domain_keyword',
-            'DOMAIN-REGEX': 'domain_regex',
-            'IP-CIDR': 'ip_cidr',
-            'IP-CIDR6': 'ip_cidr'
-        }
-        target_key = mapping.get(rule_type)
-        if not target_key:
-            return None
-        return target_key, value
 
     def _read_sing_box_source(self, content: str) -> List[str]:
         try:
@@ -472,24 +516,6 @@ class RulesMerger:
             return value
         return [value]
 
-    def _validate_classical_rule(self, rule: str) -> Optional[str]:
-        try:
-            parts = rule.split(',')
-            if len(parts) < 2:
-                return None
-            rule_type = parts[0]
-            value = parts[1].strip()
-            rule = ','.join(part.strip() for part in parts)
-            if rule_type in {'DOMAIN', 'DOMAIN-SUFFIX'}:
-                return rule if DOMAIN_PATTERN.match(value) else None
-            elif rule_type == 'IP-CIDR':
-                return rule if self._get_ipcidr_version(value) == 4 else None
-            elif rule_type == 'IP-CIDR6':
-                return rule if self._get_ipcidr_version(value) == 6 else None
-            return rule
-        except:
-            return None
-
     def _validate_ipcidr_rule(self, rule: str) -> Optional[str]:
         if self._get_ipcidr_version(rule):
             return rule
@@ -500,12 +526,6 @@ class RulesMerger:
             return ipaddress.ip_network(rule, strict=False).version
         except ValueError:
             return None
-
-    def _validate_domain_rule(self, rule: str) -> Optional[str]:
-        domain = rule[2:] if rule.startswith('+.') else rule
-        if DOMAIN_PATTERN.match(domain):
-            return rule
-        return None
 
     def _read_mrs_file(self, input_path: str, behavior: str) -> List[str]:
         if not self.mihomo_path:
@@ -631,7 +651,7 @@ class RulesMerger:
                     self._log_generated_rule_file('json', output_path, len(rules))
                     return
 
-            # ===================== YAML 输出（已移除 behavior） =====================
+            # YAML 输出
             with open(output_path, 'w', encoding='utf-8') as f:
                 if not output_path.endswith('.tmp'):
                     f.write(f"# 更新时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -640,7 +660,7 @@ class RulesMerger:
                 
                 if rule_format == 'yaml':
                     for rule in rules:
-                        f.write(f"  - '{rule}'\n")   # 保持单引号格式
+                        f.write(f"  - '{rule}'\n")
                 else:
                     f.write('\n'.join(rules))
             
