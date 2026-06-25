@@ -156,10 +156,10 @@
   upstream: *adblock_ip_upstream
 
 # direct
-- path: output/direct.mrs
+- path: output/cn.mrs
   format: mrs
   behavior: domain
-  upstream: &direct_upstream
+  upstream: &cn_upstream
     skk_domestic:
       type: http
       url: https://ruleset.skk.moe/Clash/non_ip/domestic.txt
@@ -180,27 +180,40 @@
       url: https://raw.githubusercontent.com/Accademia/Additional_Rule_For_Clash/refs/heads/main/GeositeCN/GeositeCN.yaml
       format: yaml
       behavior: classical
+   MetaCubeX_cn:
+      type: http
+      url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/cn.yaml
+      format: yaml
+      behavior: domain
+      
+   DustinWin_cn :
+      type: http
+      url: https://github.com/DustinWin/ruleset_geodata/releases/download/mihomo-ruleset/cn.mrs
+      format: mrs
+      behavior: domain
+      
+    
 
-- path: output/direct.yaml
+- path: output/cn.yaml
   format: yaml
   behavior: classical
-  upstream: *direct_upstream
+  upstream: *cn_upstream
 
-- path: output/direct.json
+- path: output/cn.json
   format: json
   behavior: sing-box
-  upstream: *direct_upstream
+  upstream: *cn_upstream
 
-- path: output/direct.srs
+- path: output/cn.srs
   format: srs
   behavior: sing-box
-  upstream: *direct_upstream
+  upstream: *cn_upstream
 
 # direct@ip
-- path: output/direct@ip.mrs
+- path: output/cn_ip.mrs
   format: mrs
   behavior: ipcidr
-  upstream: &direct_ip_upstream
+  upstream: &cn_ip_upstream
     skk_domestic_ip:
       type: http
       url: https://ruleset.skk.moe/Clash/ip/domestic.txt
@@ -216,26 +229,31 @@
       url: https://ruleset.skk.moe/Clash/ip/china_ip_ipv6.txt
       format: text
       behavior: ipcidr
-    geoip_cn:
+    skk_china_ipv6:
       type: http
-      url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/meta/geo/geoip/cn.list
+      url: https://github.com/DustinWin/ruleset_geodata/releases/download/mihomo-ruleset/cnip.list
       format: text
       behavior: ipcidr
+    geoip_cn:
+      type: http
+      url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geoip/cn.yaml
+      format: yaml
+      behavior: ipcidr
 
-- path: output/direct@ip.yaml
+- path: output/cn_ip.yaml
   format: yaml
   behavior: classical
-  upstream: *direct_ip_upstream
+  upstream: *cn_ip_upstream
 
-- path: output/direct@ip.json
+- path: output/cn_ip.json
   format: json
   behavior: sing-box
-  upstream: *direct_ip_upstream
+  upstream: *cn_ip_upstream
 
-- path: output/direct@ip.srs
+- path: output/cn_ip.srs
   format: srs
   behavior: sing-box
-  upstream: *direct_ip_upstream
+  upstream: *cn_ip_upstream
 
 # microsoft@cn
 - path: output/microsoft@cn.mrs
