@@ -374,10 +374,10 @@
   upstream: *ai_upstream
 
 # proxy
-- path: output/proxy.mrs
+- path: output/gfw.mrs
   format: mrs
   behavior: domain
-  upstream: &proxy_upstream
+  upstream: &gfw_upstream
     skk_cdn_domainset:
       type: http
       url: https://ruleset.skk.moe/Clash/domainset/cdn.txt
@@ -433,82 +433,59 @@
       url: https://ruleset.skk.moe/Clash/non_ip/stream_biliintl.txt
       format: text
       behavior: classical
+    DustinWin_proxy:
+      type: http
+      url: https://github.com/DustinWin/ruleset_geodata/releases/download/mihomo-ruleset/proxy.mrs
+      format: mrs
+      behavior: domain
+    DustinWin_madia:
+      type: http
+      url: https://github.com/DustinWin/ruleset_geodata/releases/download/mihomo-ruleset/media.mrs
+      format: mrs
+      behavior: domain
+    DustinWin_gfw:
+      type: http
+      url: https://github.com/DustinWin/ruleset_geodata/releases/download/mihomo-ruleset/gfw.mrs
+      format: mrs
+      behavior: domain
+    MetaCubeX_tld-!cn:
+      type: http
+      url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/tld-!cn.mrs
+      format: mrs
+      behavior: domain
+    MetaCubeX_geolocation-!cn:
+      type: http
+      url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/geolocation-!cn.mrs
+      format: mrs
+      behavior: domain
+    MetaCubeX_gfw:
+      type: http
+      url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/gfw.mrs
+      format: mrs
+      behavior: domain
 
-- path: output/proxy.yaml
+
+- path: output/gfw.yaml
   format: yaml
-  behavior: classical
-  upstream: &proxy_yaml_upstream
-    skk_cdn_domainset:
-      type: http
-      url: https://ruleset.skk.moe/Clash/domainset/cdn.txt
-      format: text
-      behavior: domain
-    skk_cdn:
-      type: http
-      url: https://ruleset.skk.moe/Clash/non_ip/cdn.txt
-      format: text
-      behavior: classical
-    skk_stream:
-      type: http
-      url: https://ruleset.skk.moe/Clash/non_ip/stream.txt
-      format: text
-      behavior: classical
-    telegram:
-      type: http
-      url: https://ruleset.skk.moe/Clash/non_ip/telegram.txt
-      format: text
-      behavior: classical
-    skk_download_domainset:
-      type: http
-      url: https://ruleset.skk.moe/Clash/domainset/download.txt
-      format: text
-      behavior: domain
-    skk_download:
-      type: http
-      url: https://ruleset.skk.moe/Clash/non_ip/download.txt
-      format: text
-      behavior: classical
-    skk_global:
-      type: http
-      url: https://ruleset.skk.moe/Clash/non_ip/global.txt
-      format: text
-      behavior: classical
-    xndeye_proxy:
-      type: file
-      path: local/proxy.yaml
-      format: yaml
-      behavior: classical
-    gfw:
-      type: http
-      url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/meta/geo/geosite/gfw.list
-      format: text
-      behavior: domain
-    google_cn:
-      type: http
-      url: https://github.com/DustinWin/domain-list-custom/releases/download/domains/google-cn.list
-      format: text
-      behavior: classical
-    skk_biliintl:
-      type: http
-      url: https://ruleset.skk.moe/Clash/non_ip/stream_biliintl.txt
-      format: text
-      behavior: classical
+  behavior: domain
+  upstream: *gfw_upstream
 
-- path: output/proxy.json
+
+- path: output/gfw.json
   format: json
   behavior: sing-box
-  upstream: *proxy_upstream
+  upstream: *gfw_upstream
 
-- path: output/proxy.srs
+- path: output/gfw.srs
   format: srs
   behavior: sing-box
-  upstream: *proxy_upstream
+  upstream: *gfw_upstream
 
 # proxy@ip
-- path: output/proxy@ip.mrs
+- path: output/gfw_ip.mrs
   format: mrs
   behavior: ipcidr
-  upstream: &proxy_ip_upstream
+  upstream: &gfw_ip_upstream
     skk_stream_ip:
       type: http
       url: https://ruleset.skk.moe/Clash/ip/stream.txt
@@ -525,20 +502,20 @@
       format: text
       behavior: classical
 
-- path: output/proxy@ip.yaml
+- path: output/gfw_ip.yaml
   format: yaml
   behavior: classical
-  upstream: *proxy_ip_upstream
+  upstream: *gfw_ip_upstream
 
-- path: output/proxy@ip.json
+- path: output/gfw_ip.json
   format: json
   behavior: sing-box
-  upstream: *proxy_ip_upstream
+  upstream: *gfw_ip_upstream
 
-- path: output/proxy@ip.srs
+- path: output/gfw_ip.srs
   format: srs
   behavior: sing-box
-  upstream: *proxy_ip_upstream
+  upstream: *gfw_ip_upstream
 
 # lan@ip
 - path: output/lan@ip.mrs
