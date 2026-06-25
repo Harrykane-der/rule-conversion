@@ -615,6 +615,11 @@
       url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/fake-ip-filter.mrs
       format: mrs
       behavior: domain
+    wwqgtxx_fake_ip_filter:
+      type: http
+      url: https://raw.githubusercontent.com/wwqgtxx/clash-rules/release/fakeip-filter.mrs
+      format: mrs
+      behavior: domain
     Harrykane-der_fake_ip_filter:
       type: http
       url: https://github.com/Harrykane-der/mihomo-rules/raw/refs/heads/main/fakeip-filter.yaml
