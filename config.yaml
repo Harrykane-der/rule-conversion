@@ -160,26 +160,6 @@
   format: mrs
   behavior: domain
   upstream: &cn_upstream
-    skk_domestic:
-      type: http
-      url: https://ruleset.skk.moe/Clash/non_ip/domestic.txt
-      format: text
-      behavior: classical
-    skk_direct:
-      type: http
-      url: https://ruleset.skk.moe/Clash/non_ip/direct.txt
-      format: text
-      behavior: classical
-    xndeye_direct:
-      type: file
-      path: local/direct.yaml
-      format: yaml
-      behavior: classical
-    geosite_cn:
-      type: http
-      url: https://raw.githubusercontent.com/Accademia/Additional_Rule_For_Clash/refs/heads/main/GeositeCN/GeositeCN.yaml
-      format: yaml
-      behavior: classical
     MetaCubeX_cn:
       type: http
       url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/cn.yaml
