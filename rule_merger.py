@@ -19,9 +19,9 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-# 支持 Clash 通配符的域名正则（*.example.com、*.*.microsoft.com 等）
+# 支持 Clash 通配符的域名正则
 DOMAIN_PATTERN = re.compile(
-    r'^\*?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\( |^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)* \)'
+    r'^(?:\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*)?\( |^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)* \)'
 )
 
 MIHOMO_PATH = 'mihomo'
@@ -229,13 +229,14 @@ class RulesMerger:
             return data
         return []
 
-    # ====================== 通配符支持核心修复 ======================
     def _validate_domain_rule(self, rule: str) -> Optional[str]:
-        """支持 Clash 通配符 * 的域名验证"""
+        """支持 Clash 通配符 * 的域名验证，不会影响其他规则类型"""
         if not rule:
             return None
         domain = rule[2:] if rule.startswith('+.') else rule
-        if DOMAIN_PATTERN.match(domain):
+        # 支持 *.example.com 和普通域名
+        cleaned = domain.replace('*.', '')
+        if DOMAIN_PATTERN.match(cleaned) or DOMAIN_PATTERN.match(domain):
             return rule
         return None
 
@@ -245,10 +246,8 @@ class RulesMerger:
             return None
         suffix = parts[0].strip()
         domain = parts[1].strip()
-        
         if not self._validate_domain_rule(domain):
             return None
-            
         if suffix == 'DOMAIN':
             return domain
         elif suffix == 'DOMAIN-SUFFIX':
@@ -641,7 +640,7 @@ class RulesMerger:
                     self._log_generated_rule_file('json', output_path, len(rules))
                     return
 
-            # ===================== YAML 输出（无 behavior） =====================
+            # YAML 输出（无 behavior + 单引号）
             with open(output_path, 'w', encoding='utf-8') as f:
                 if not output_path.endswith('.tmp'):
                     f.write(f"# 更新时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
