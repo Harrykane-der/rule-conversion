@@ -78,6 +78,11 @@
   format: mrs
   behavior: domain
   upstream: &adblock_upstream
+    ads:
+      type: http
+      url: https://ruleset.skk.moe/Clash/non_ip/reject.txt
+      format: text
+      behavior: classical
     adrules:
       type: http
       url: https://github.com/echs-top/proxy/raw/refs/heads/main/mrs/domain/ads.mrs
