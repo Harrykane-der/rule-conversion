@@ -125,11 +125,6 @@
   format: mrs
   behavior: ipcidr
   upstream: &adblock_ip_upstream
-    skk_reject_ip:
-      type: http
-      url: https://ruleset.skk.moe/Clash/ip/reject.txt
-      format: text
-      behavior: classical
     httpdns_ip:
       type: http
       url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/ipcidr/httpdns.mrs
