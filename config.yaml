@@ -78,11 +78,6 @@
   format: mrs
   behavior: domain
   upstream: &adblock_upstream
-    xndeye_reject:
-      type: http
-      url: https://ruleset.skk.moe/Clash/domainset/reject.txt
-      format: text
-      behavior: domain
     adrules:
       type: http
       url: https://github.com/echs-top/proxy/raw/refs/heads/main/mrs/domain/ads.mrs
