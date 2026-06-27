@@ -103,7 +103,11 @@
       url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/category-ads-all.mrs
       format: mrs
       behavior: domain
-
+    reject:
+      type: http
+      url: https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/reject-list.txt
+      format: text
+      behavior: domain
 
 
 - path: output/adblock.yaml
