@@ -340,21 +340,23 @@ class RulesMerger:
             json.dump(rule_set, f, ensure_ascii=False, indent=2)
 
     def _to_sing_box_rules(self, rules: List[str], behavior: str) -> List[Dict[str, Any]]:
-        merged = {
+        merged = [
+          {
             'domain': []
-        },
-        {
+          },
+          {
             'domain_suffix': []
-        },
-        {
+          },
+          {
             'domain_keyword': []
-        },
-        {
+          },
+          {
             'domain_regex': []
-        },
-        {
+          },
+          {
             'ip_cidr': []
-        }
+          }
+        ]
 
         if behavior == 'sing-box':
             for rule_str in rules:
