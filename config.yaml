@@ -78,11 +78,6 @@
   format: mrs
   behavior: domain
   upstream: &adblock_upstream
-    ads:
-      type: http
-      url: https://ruleset.skk.moe/Clash/non_ip/reject.txt
-      format: text
-      behavior: classical
     adrules:
       type: http
       url: https://github.com/echs-top/proxy/raw/refs/heads/main/mrs/domain/ads.mrs
@@ -105,9 +100,9 @@
       behavior: domain
     reject:
       type: http
-      url: https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/reject-list.txt
-      format: text
-      behavior: domain
+      url: https://github.com/SagerNet/sing-geosite/raw/refs/heads/rule-set/geosite-category-ads-all.srs
+      format: srs
+      behavior: singbox
 
 
 - path: output/adblock.yaml
@@ -173,7 +168,11 @@
       url: https://github.com/echs-top/proxy/raw/refs/heads/main/list/domain/cn.list
       format: text
       behavior: domain 
-      
+    sb_cn:
+      type: http
+      url: https://github.com/SagerNet/sing-geosite/raw/refs/heads/rule-set/geosite-cn.srs
+      format: srs
+      behavior: singbox
     
 
 - path: output/cn.yaml
@@ -226,6 +225,11 @@
       url: https://github.com/echs-top/proxy/raw/refs/heads/main/list/ip/cn.list
       format: text
       behavior: ipcidr
+    sb_cn_ip:
+      type: http
+      url: https://github.com/SagerNet/sing-geoip/raw/refs/heads/rule-set/geoip-cn.srs
+      format: srs
+      behavior: singbox
 
 - path: output/cn_ip.yaml
   format: yaml
