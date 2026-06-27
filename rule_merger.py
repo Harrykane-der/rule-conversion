@@ -24,7 +24,7 @@ DOMAIN_PATTERN = re.compile(
 
 MIHOMO_PATH = 'mihomo'
 SING_BOX_PATH = 'sing-box'
-SING_BOX_RULESET_VERSION = 4
+SING_BOX_RULESET_VERSION = 5
 SING_BOX_LIST_FIELDS = (
     'domain',
     'domain_suffix',
