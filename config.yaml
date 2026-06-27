@@ -139,7 +139,7 @@
 
 - path: output/adblock_ip.yaml
   format: yaml
-  behavior: classical
+  behavior: ipcidr
   upstream: *adblock_ip_upstream
 
 - path: output/adblock_ip.json
@@ -156,11 +156,21 @@
   format: srs
   behavior: sing-box
   upstream: &ablock_upstream
-    httpdns_ip:
+    Harrykane-der_ablock:
       type: http
       url: https://github.com/Harrykane-der/my-rules/refs/heads/main/ablock.json
       format: json
       behavior: sing-box
+
+- path: output/ablock.yaml
+  format: yaml
+  behavior: classical
+  upstream: *&ablock_upstream
+
+- path: output/ablock.json
+  format: json
+  behavior: sing-box
+  upstream: *&ablock_upstream
 
 # direct
 - path: output/cn.mrs
