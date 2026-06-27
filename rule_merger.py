@@ -342,9 +342,13 @@ class RulesMerger:
     def _to_sing_box_rules(self, rules: List[str], behavior: str) -> List[Dict[str, Any]]:
         merged = {
             'domain': [],
+        },
             'domain_suffix': [],
+        },
             'domain_keyword': [],
+        },
             'domain_regex': [],
+        },
             'ip_cidr': []
         }
 
