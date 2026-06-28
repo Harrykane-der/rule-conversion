@@ -27,8 +27,8 @@ jobs:
         run: |
           mkdir -p rule
           URL="https://github.com/Harrykane-der/my-rules/raw/refs/heads/main/ablock.json"
-          curl -L -o rule/ablock.txt "$URL"
-          echo "Downloaded: $(wc -l rule/ablock.txt) lines"
+          curl -L -o rule/ablock.json "$URL"
+          echo "Downloaded: $(wc -l rule/ablock.json) lines"
 
       # ==================== 转换 AdGuard → sing-box rule-set ====================
       - name: Convert AdGuard to sing-box rule-set (version 5)
