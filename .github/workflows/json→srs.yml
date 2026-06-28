@@ -46,7 +46,7 @@ jobs:
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
           
-          git add rule/adservers.txt rule/adservers.json rule/adservers.srs
+          git add rule/ablock.json rule/ablock.srs
 
           if git diff --staged --quiet; then
             echo "No changes to commit"
