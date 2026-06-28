@@ -5,7 +5,7 @@ on:
     branches: [ main ]
   workflow_dispatch:
   schedule:
-    - cron: '0 12 * * *'   # 每天中午 12:00 UTC 执行
+    - cron: '0 12 * * *'
 
 jobs:
   build:
@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ==================== 安装指定 sing-box 版本 ====================
+      # ==================== 安装 sing-box ====================
       - name: Setup sing-box v1.14.0-alpha.36
         run: |
           wget -q https://github.com/SagerNet/sing-box/releases/download/v1.14.0-alpha.36/sing-box-1.14.0-alpha.36-linux-amd64.tar.gz -O sing-box.tar.gz
@@ -22,23 +22,27 @@ jobs:
           sudo mv sing-box-*-linux-amd64/sing-box /usr/local/bin/sing-box
           sing-box version
 
-      # ==================== 下载 AdGuard 规则 ====================
-      - name: Download ablock
+      # ==================== 下载 sing-box JSON 规则 ====================
+      - name: Download ablock.json
         run: |
           mkdir -p rule
           URL="https://github.com/Harrykane-der/my-rules/raw/refs/heads/main/ablock.json"
-          curl -L -o rule/ablock.json "$URL"
+          curl -L -f -o rule/ablock.json "$URL" || { echo "❌ Download failed!"; exit 1; }
           echo "Downloaded: $(wc -l rule/ablock.json) lines"
+          ls -lh rule/ablock.json
 
-      # ==================== 转换 AdGuard → sing-box rule-set ====================
-      - name: Convert AdGuard to sing-box rule-set (version 5)
+      # ==================== JSON → SRS 转换 ====================
+      - name: Convert sing-box JSON to SRS (version 5)
         run: |
-          # 编译成 .srs
+          echo "🔄 Converting JSON to SRS (version 5)..."
+          
           sing-box rule-set compile \
             --output rule/ablock.srs \
+            --version 5 \
             rule/ablock.json
 
-          echo "✅ Conversion completed: ablock.json + ablock.srs"
+          echo "✅ Conversion completed successfully!"
+          ls -lh rule/ablock.srs
 
       # ==================== 提交更新 ====================
       - name: Commit and push
@@ -51,7 +55,7 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Update AdGuard rules - $(date +'%Y-%m-%d %H:%M:%S')"
+            git commit -m "Update ablock rule-set - $(date +'%Y-%m-%d %H:%M:%S')"
             git push
             echo "✅ Rules updated and pushed"
           fi
