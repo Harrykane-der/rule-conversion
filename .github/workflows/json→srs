@@ -1,0 +1,45 @@
+name: JSON to SRS (version 5)
+
+on:
+  push:
+    paths:
+      - 'rules/*.json'
+  workflow_dispatch:
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装最新 sing-box
+        run: |
+          wget -q https://github.com/SagerNet/sing-box/releases/latest/download/sing-box-1.12.0-linux-amd64.tar.gz -O sing-box.tar.gz
+          tar -xzf sing-box.tar.gz
+          sudo mv sing-box-*-linux-amd64/sing-box /usr/local/bin/sing-box
+
+      - name: 转换所有 JSON 为 SRS (version 5)
+        run: |
+          mkdir -p srs
+          for json in rules/*.json; do
+            if [ -f "$json" ]; then
+              name=$(basename "$json" .json)
+              echo "转换 → $name.srs (version 5)"
+              
+              # 先确保 JSON 是 version 5
+              jq '.version = 5' "\( json" > "/tmp/ \){name}.json"
+              
+              sing-box rule-set compile \
+                --output "srs/$name.srs" \
+                "/tmp/${name}.json"
+            fi
+          done
+
+      - name: 提交 SRS 文件
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add srs/
+          git commit -m "Update SRS (version 5) - $(date +'%Y-%m-%d %H:%M')" || echo "No changes"
+          git push
