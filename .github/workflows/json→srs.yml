@@ -1,63 +1,57 @@
-name: JSON → SRS (version 5)
+name: Config Update
 
 on:
   push:
-    paths:
-      - 'rules/**.json'
+    branches: [ main ]
   workflow_dispatch:
+  schedule:
+    - cron: '0 12 * * *'   # 每天中午 12:00 UTC 执行
 
 jobs:
-  compile:
+  build:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: 安装 sing-box v1.14.0-alpha.36
+      # ==================== 安装指定 sing-box 版本 ====================
+      - name: Setup sing-box v1.14.0-alpha.36
         run: |
           wget -q https://github.com/SagerNet/sing-box/releases/download/v1.14.0-alpha.36/sing-box-1.14.0-alpha.36-linux-amd64.tar.gz -O sing-box.tar.gz
           tar -xzf sing-box.tar.gz
           sudo mv sing-box-*-linux-amd64/sing-box /usr/local/bin/sing-box
-          echo "sing-box version: $(sing-box version)"
+          sing-box version
 
-      - name: JSON → SRS 转换 (version 5)
+      # ==================== 下载 AdGuard 规则 ====================
+      - name: Download ablock
         run: |
-          mkdir -p srs
-          shopt -s nullglob
-          found=false
+          mkdir -p rule
+          URL="https://github.com/Harrykane-der/my-rules/raw/refs/heads/main/ablock.json"
+          curl -L -o rule/ablock.txt "$URL"
+          echo "Downloaded: $(wc -l rule/ablock.txt) lines"
 
-          for json_file in rules/*.json; do
-            if [ -f "$json_file" ]; then
-              found=true
-              name=$(basename "$json_file" .json)
-              echo "正在转换: $name.json → $name.srs"
-
-              # 强制设置为 version 5
-              jq '.version = 5' "\( json_file" > "/tmp/ \){name}_v5.json"
-
-              sing-box rule-set compile \
-                --output "srs/$name.srs" \
-                "/tmp/${name}_v5.json"
-
-              rm -f "/tmp/${name}_v5.json"
-              echo "✅ 成功生成: srs/$name.srs"
-            fi
-          done
-
-          if [ "$found" = false ]; then
-            echo "⚠️ 未找到 rules/*.json 文件，请确认目录和文件存在！"
-          fi
-
-      - name: 提交生成的 SRS 文件
+      # ==================== 转换 AdGuard → sing-box rule-set ====================
+      - name: Convert AdGuard to sing-box rule-set (version 5)
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # 编译成 .srs
+          sing-box rule-set compile \
+            --output rule/ablock.srs \
+            rule/ablock.json
+
+          echo "✅ Conversion completed: ablock.json + ablock.srs"
+
+      # ==================== 提交更新 ====================
+      - name: Commit and push
+        run: |
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
           
-          if git diff --quiet srs/ 2>/dev/null; then
-            echo "ℹ️ 没有文件变化"
+          git add rule/adservers.txt rule/adservers.json rule/adservers.srs
+
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
           else
-            git add srs/
-            git commit -m "Update SRS files (version 5) - $(date +'%Y-%m-%d %H:%M:%S')"
+            git commit -m "Update AdGuard rules - $(date +'%Y-%m-%d %H:%M:%S')"
             git push
-            echo "✅ 已提交更新"
+            echo "✅ Rules updated and pushed"
           fi
