@@ -210,7 +210,7 @@ class RulesMerger:
             if isinstance(rule, str):
                 cleaned = self._clean_rule(rule)
                 if cleaned.startswith('*.'):
-                    cleaned = '+.' + cleaned[2:]
+                    cleaned = '+.' + cleaned[2:]  # 删除 *，添加 + 表示后缀匹配
                 rule = cleaned
             # 如果是 dict 规则（原生 sing-box），保持原样
 
