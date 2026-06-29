@@ -76,21 +76,16 @@ jobs:
           echo "编译完成"
           find compiled-rules -name "*.srs" | sort
 
-      - name: 推送到 releases 分支
+      - name: 发布到 releases 分支
         run: |
           set -e
 
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          echo "保存编译结果到临时目录..."
-          mkdir -p /tmp/release
-
-          if [ -d compiled-rules ] && [ "$(ls -A compiled-rules 2>/dev/null)" ]; then
-            cp -r compiled-rules/. /tmp/release/
-          else
-            echo "❌ compiled-rules 为空，终止发布"
-            exit 1
+          if [ ! -d "compiled-rules" ] || [ -z "$(ls -A compiled-rules 2>/dev/null)" ]; then
+            echo "没有编译产物，跳过"
+            exit 0
           fi
 
           git fetch origin
@@ -102,18 +97,23 @@ jobs:
             git checkout --orphan releases
           fi
 
-          # 清空旧内容（只保留 .git）
-          find . -mindepth 1 -maxdepth 1 ! -name ".git" -exec rm -rf {} +
+          # =========================
+          # ❗关键修复：不清空整个仓库
+          # =========================
 
-          echo "写入新规则..."
-          cp -r /tmp/release/. .
+          # 如果旧 compiled-rules 存在，先删掉旧的
+          rm -rf compiled-rules
+
+          # 覆盖写入新的 compiled-rules
+          mkdir -p compiled-rules
+          cp -a "$GITHUB_WORKSPACE/compiled-rules/." compiled-rules/
 
           touch .nojekyll
 
-          git add .
+          git add compiled-rules .nojekyll
 
           if git diff --cached --quiet; then
-            echo "No changes"
+            echo "No changes."
             exit 0
           fi
 
