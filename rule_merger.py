@@ -165,7 +165,6 @@ class RulesMerger:
         return parts[0].strip() if len(parts) > 1 else rule
 
     def _transform(self, rule: Any, source_behavior: str, target_behavior: str) -> List[Any]:
-        # 统一格式名
         source_behavior = self._normalize_behavior(source_behavior)
         target_behavior = self._normalize_behavior(target_behavior)
 
@@ -205,7 +204,7 @@ class RulesMerger:
         converted_rules = []
         for rule in rules:
             if rule is None: continue
-            # 优化：判断当前是不是已经是 dict 对象或者属于 sing-box 行为，如果是则直接保留，防止错误执行清线逻辑
+            # 确保当前如果是 dict 对象或属于 sing-box 格式，直接保留，绝不执行清线逻辑
             if isinstance(rule, dict) or source_behavior == 'sing-box':
                 cleaned_rule = rule
             else:
@@ -229,6 +228,7 @@ class RulesMerger:
                 rules = self._process_source(source_config, target_behavior)
                 raw_collected.extend(rules)
 
+            # 严格各归各家区分：原生完整的 Dict 规则与单兵转换而来的字符串规则
             dict_rules = [r for r in raw_collected if isinstance(r, dict)]
             str_rules = [r for r in raw_collected if isinstance(r, str)]
 
@@ -236,7 +236,6 @@ class RulesMerger:
 
             final_rules = []
             if target_behavior == 'sing-box':
-                # 核心改进：把文本生成的单兵序列化 json 字符串 和 原生的 dict 规则全部喂给大合并压缩核心
                 final_rules = self._compile_final_sing_box_list(str_rules, dict_rules)
             else:
                 final_rules = str_rules
@@ -254,7 +253,7 @@ class RulesMerger:
         bucket = {key: [] for key in SING_BOX_LIST_FIELDS}
         passthrough_rules = []
 
-        # 1. 提取文本转换出来的 sing-box 规则片段并入桶
+        # 1. 提取并合并【由文本格式转换出来的】零散碎片 JSON
         for rule_str in converted_str_rules:
             parsed = self._parse_sing_box_rule(rule_str)
             if not parsed: continue
@@ -263,15 +262,11 @@ class RulesMerger:
             else:
                 passthrough_rules.append(parsed)
 
-        # 2. 深度深度优化：原生的 dict_rules 同样提取出来参与大桶合并压缩，实现彻底的规则瘦身去重！
-        for rule_dict in original_dict_rules:
-            if self._can_compact_sing_box_rule(rule_dict):
-                self._add_sing_box_rule_items(bucket, rule_dict)
-            else:
-                passthrough_rules.append(rule_dict)
-
+        # 2. 压缩合并大桶里的文本转换碎片
         compacted_results = self._compact_sing_box_rules(bucket)
-        all_rules_pool = compacted_results + passthrough_rules
+        
+        # 3. 精准透传：原装的完整的 original_dict_rules 直接不拆散、不加工、直接原样拼入
+        all_rules_pool = compacted_results + passthrough_rules + original_dict_rules
 
         # 高级精准特征去重
         seen_signatures = set()
