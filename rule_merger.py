@@ -24,7 +24,7 @@ DOMAIN_PATTERN = re.compile(
 
 MIHOMO_PATH = 'mihomo'
 SING_BOX_PATH = 'sing-box'
-SING_BOX_RULESET_VERSION = 4
+SING_BOX_RULESET_VERSION = 5
 SING_BOX_LIST_FIELDS = (
     'domain',
     'domain_suffix',
@@ -117,6 +117,27 @@ class RulesMerger:
             self.logger.error(f"获取规则失败 {url}: {str(e)}", exc_info=True)
             return []
     
+
+    def _fetch_http_srs_rules(self, url: str) -> List[str]:
+        if not self.sing_box_path:
+            self.logger.error("未找到 sing-box")
+            return []
+        json_path=self._make_temp_path('.json')
+        srs_path=self._make_temp_path('.srs')
+        out_json=self._make_temp_path('.json')
+        try:
+            r=requests.get(url,timeout=20);r.raise_for_status()
+            open(json_path,'wb').write(r.content)
+            if not self._convert_to_srs(json_path,srs_path):
+                return []
+            cmd=[self.sing_box_path,'rule-set','decompile','--output',out_json,srs_path]
+            rs=subprocess.run(cmd,capture_output=True,text=True)
+            if rs.returncode!=0:return []
+            return self._read_sing_box_source(Path(out_json).read_text(encoding='utf-8'))
+        finally:
+            for p in (json_path,srs_path,out_json):
+                if os.path.exists(p): os.unlink(p)
+
     def _transform(self, rule: str, source_behavior: str, target_behavior: str) -> List[str]:
         """转换规则格式"""
         if not rule:
@@ -256,7 +277,10 @@ class RulesMerger:
             if not url:
                 self.logger.warning("http规则源缺少url")
                 return []
-            rules = self._fetch_http_rules(url, rule_format, source_behavior)
+            if rule_format == 'json' or url.lower().split('?')[0].endswith('.json'):
+                rules = self._fetch_http_srs_rules(url)
+            else:
+                rules = self._fetch_http_rules(url, rule_format, source_behavior)
         elif source_type == 'file':
             path = source.get('path')
             if not path:
