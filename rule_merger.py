@@ -24,7 +24,7 @@ DOMAIN_PATTERN = re.compile(
 
 MIHOMO_PATH = 'mihomo'
 SING_BOX_PATH = 'sing-box'
-SING_BOX_RULESET_VERSION = 5
+SING_BOX_RULESET_VERSION = 4
 SING_BOX_LIST_FIELDS = (
     'domain',
     'domain_suffix',
@@ -133,7 +133,9 @@ class RulesMerger:
             cmd=[self.sing_box_path,'rule-set','decompile','--output',out_json,srs_path]
             rs=subprocess.run(cmd,capture_output=True,text=True)
             if rs.returncode!=0:return []
-            return self._read_sing_box_source(Path(out_json).read_text(encoding='utf-8'))
+            # 修复 NameError: name 'Path' is not defined 错误
+            with open(out_json, 'r', encoding='utf-8') as f:
+                return self._read_sing_box_source(f.read())
         finally:
             for p in (json_path,srs_path,out_json):
                 if os.path.exists(p): os.unlink(p)
