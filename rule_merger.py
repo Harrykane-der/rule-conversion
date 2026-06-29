@@ -24,7 +24,7 @@ DOMAIN_PATTERN = re.compile(
 
 MIHOMO_PATH = 'mihomo'
 SING_BOX_PATH = 'sing-box'
-SING_BOX_RULESET_VERSION = 5
+SING_BOX_RULESET_VERSION = 4
 
 # sing-box 标准支持的列表字段
 SING_BOX_LIST_FIELDS = (
@@ -274,7 +274,6 @@ class RulesMerger:
                 }
                 
                 if rtype in mapping:
-                    # 验证合法性
                     if rtype in ('DOMAIN', 'DOMAIN-SUFFIX') and not DOMAIN_PATTERN.match(rval):
                         continue
                     if rtype == 'IP-CIDR' and self._get_ipcidr_version(rval) != 4:
@@ -282,7 +281,6 @@ class RulesMerger:
                     if rtype == 'IP-CIDR6' and self._get_ipcidr_version(rval) != 6:
                         continue
                     
-                    # 端口多段处理
                     if mapping[rtype] == 'port':
                         for sp in [p.strip() for p in rval.split('/')]:
                             if sp.isdigit():
@@ -330,20 +328,23 @@ class RulesMerger:
             # 根据目标行为 (Target Behavior) 重组并打包数据
             final_rules = []
 
+            # 【核心修复】：如果目标是 sing-box，将每个原子规则项包装为独立的单条 JSON 规则对象
+            # 这样可以在 `rules` 列表中展现真实的规则条目总数，并完美兼容底层编译器结构。
             if target_behavior == 'sing-box':
-                def port_sort_key(x):
-                    return (0, int(x)) if isinstance(x, int) else (0, int(x)) if str(x).isdigit() else (1, str(x))
-
-                compact_bucket = {}
-                for field in SING_BOX_LIST_FIELDS:
-                    if total_bucket.get(field):
-                        if field == 'port':
-                            compact_bucket[field] = sorted(list(total_bucket[field]), key=port_sort_key)
-                        else:
-                            compact_bucket[field] = sorted(list(total_bucket[field]))
-                            
-                if compact_bucket:
-                    final_rules.append(json.dumps(compact_bucket, ensure_ascii=False))
+                for d in sorted(list(total_bucket['domain'])):
+                    final_rules.append(json.dumps({'domain': [d]}, ensure_ascii=False))
+                for s in sorted(list(total_bucket['domain_suffix'])):
+                    final_rules.append(json.dumps({'domain_suffix': [s]}, ensure_ascii=False))
+                for k in sorted(list(total_bucket['domain_keyword'])):
+                    final_rules.append(json.dumps({'domain_keyword': [k]}, ensure_ascii=False))
+                for r in sorted(list(total_bucket['domain_regex'])):
+                    final_rules.append(json.dumps({'domain_regex': [r]}, ensure_ascii=False))
+                for ip in sorted(list(total_bucket['ip_cidr'])):
+                    final_rules.append(json.dumps({'ip_cidr': [ip]}, ensure_ascii=False))
+                for p in sorted(list(total_bucket['port']), key=lambda x: (0, int(x)) if str(x).isdigit() else (1, str(x))):
+                    final_rules.append(json.dumps({'port': [p]}, ensure_ascii=False))
+                for n in sorted(list(total_bucket['network'])):
+                    final_rules.append(json.dumps({'network': [n]}, ensure_ascii=False))
                     
             elif target_behavior == 'domain':
                 final_rules.extend(sorted(list(total_bucket['domain'])))
