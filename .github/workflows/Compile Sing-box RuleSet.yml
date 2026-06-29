@@ -4,14 +4,14 @@ on:
   push:
     branches: [ main, master ]
     paths:
-      - 'local/**.json'      # 只在 rules 目录下的 json 文件变化时触发
+      - 'local/**/*.json'
   pull_request:
     branches: [ main, master ]
     paths:
-      - 'rules/**.json'
-  workflow_dispatch:         # 允许手动触发
+      - 'local/**/*.json'
+  workflow_dispatch:
   schedule:
-    - cron: '0 3 * * *'      # 每天 UTC 3点自动运行（可选）
+    - cron: '0 4 * * *'
 
 jobs:
   compile:
@@ -25,50 +25,65 @@ jobs:
 
       - name: 安装 sing-box
         run: |
-          wget -qO- https://github.com/SagerNet/sing-box/releases/download/v1.14.0-alpha.36/sing-box-1.14.0-alpha.36-linux-amd64.tar.gz | tar -xz
+          wget -q https://github.com/SagerNet/sing-box/releases/latest/download/sing-box-latest-linux-amd64.tar.gz -O sing-box.tar.gz
+          tar -xzf sing-box.tar.gz
           sudo mv sing-box-*/sing-box /usr/local/bin/sing-box
           sudo chmod +x /usr/local/bin/sing-box
-          sing-box version
+          echo "sing-box version: $(sing-box version)"
 
-      - name: 编译 source → binary 规则集
+      - name: 转换 JSON 规则集 (source → binary)
         run: |
           mkdir -p compiled-rules
           
-          echo "开始转换所有 source 规则集..."
-          find rules -type f -name "*.json" | while read -r file; do
-            # 保留相对目录结构
-            rel_path="${file#rules/}"
+          echo "🔍 正在查找 local/ 目录下的 .json 文件..."
+          mapfile -t files < <(find local -type f -name "*.json" 2>/dev/null)
+          
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "❌ 在 local/ 目录下未找到任何 .json 文件"
+            echo "当前 local 目录内容："
+            ls -R local/ || echo "local 目录不存在"
+            exit 1
+          fi
+          
+          echo "✅ 找到 ${#files[@]} 个 .json 文件，开始转换..."
+          
+          for file in "${files[@]}"; do
+            rel_path="${file#local/}"
             target_dir="compiled-rules/$(dirname "$rel_path")"
             mkdir -p "$target_dir"
             
             target="\( {target_dir}/ \)(basename "${file%.json}.srs")"
             
-            echo "转换: $file → $target"
-            sing-box rule-set compile --output "$target" "$file"
+            echo "正在转换: $file → $target"
+            if sing-box rule-set compile --output "$target" "$file"; then
+              echo "✅ 转换成功"
+            else
+              echo "❌ 转换失败: $file"
+            fi
           done
 
-          echo "转换完成！共生成以下文件："
-          find compiled-rules -type f -name "*.srs" | head -20
+          echo "=== 生成的 .srs 文件 ==="
+          find compiled-rules -type f -name "*.srs" | sort || echo "未生成任何 .srs 文件"
 
-      - name: 提交并推送生成的 .srs 文件
+      - name: 提交生成的 .srs 文件
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
-          git add compiled-rules/
-          
-          if git diff --cached --quiet; then
-            echo "没有新的 .srs 文件需要提交"
+          if git diff --quiet --cached compiled-rules/ 2>/dev/null; then
+            echo "没有新的更改需要提交"
           else
+            git add compiled-rules/
             git commit -m "chore: 自动编译 rule-set binary 文件 $(date +'%Y-%m-%d %H:%M:%S')"
             git push
+            echo "✅ 已成功提交 .srs 文件"
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 上传 artifacts（可选）
+      - name: 上传 Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: sing-box-rule-sets-binary
           path: compiled-rules/
-          retention-days: 7
+          retention-days: 14
