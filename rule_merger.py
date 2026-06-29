@@ -23,7 +23,7 @@ PORT_PATTERN = re.compile(r'^\d+(?:-\d+)?$')
 
 MIHOMO_PATH = 'mihomo'
 SING_BOX_PATH = 'sing-box'
-SING_BOX_RULESET_VERSION = 4
+SING_BOX_RULESET_VERSION = 5
 
 SING_BOX_LIST_FIELDS = (
     'domain',
@@ -159,14 +159,16 @@ class RulesMerger:
         return parts[0].strip() if len(parts) > 1 else rule
 
     def _transform(self, rule: Any, source_behavior: str, target_behavior: str) -> List[Any]:
-        """执行流转。若输入本身就是结构化的字典，且目标也是 sing-box，则直接放行不予转换"""
+        """执行流转。支持对原始 dict 进行逆向拆解为单行文本规则"""
         if isinstance(rule, dict):
             if target_behavior == 'sing-box':
-                return [rule]  # 原装保留
-            # 如果目标是经典/域名/IP，则需提取
-            rule_str = json.dumps(rule)
+                return [rule]  # 目标是 sing-box，原装放行
+            
+            # 当规则源是 sing-box (dict)，但目标是 classical / domain / ipcidr 时，执行逆向降维分解
             transformer = self._transformers.get(('sing-box', target_behavior))
-            return transformer(rule_str) if transformer else []
+            if transformer:
+                return transformer(json.dumps(rule))
+            return []
 
         if not rule: return []
         if source_behavior == target_behavior:
@@ -194,7 +196,6 @@ class RulesMerger:
         converted_rules = []
         for rule in rules:
             if rule is None: continue
-            # 非字典类型的传统单行才需要做常规去皮清洗
             cleaned_rule = rule if isinstance(rule, dict) or source_behavior == 'sing-box' else self._clean_rule(str(rule))
             transformed = self._transform(cleaned_rule, source_behavior, target_behavior)
             if transformed:
@@ -225,7 +226,7 @@ class RulesMerger:
             # 2. 最终合并处理
             final_rules = []
             if target_behavior == 'sing-box':
-                # 核心要求：将来自非sing-box格式转换出来的零碎规则汇总大合并
+                # 核心要求：将来自非sing-box格式转换出来的零碎规则汇总大合并，再与原始 dict 合并去重
                 final_rules = self._compile_final_sing_box_list(str_rules, dict_rules)
             else:
                 # 传统行为：直接合并
@@ -241,12 +242,6 @@ class RulesMerger:
             )
 
     def _compile_final_sing_box_list(self, converted_str_rules: List[str], original_dict_rules: List[Dict]) -> List[Dict]:
-        """
-        在这里实现你的核心诉求：
-        1. 那些由文本规则(classical/domain)转换出来的、处于序列化单行JSON状态的单兵规则，先送入大桶合并（Compact）。
-        2. 合并完之后，再和原装进来的、没被破坏过的 `original_dict_rules` 汇合。
-        3. 进行最终的高级对象去重，杜绝任何格式污染。
-        """
         bucket = {key: [] for key in SING_BOX_LIST_FIELDS}
         passthrough_rules = []
 
@@ -336,7 +331,7 @@ class RulesMerger:
                 self._write_sing_box_source_direct(tmp_path, rules, version)
                 try:
                     if self._convert_to_srs(tmp_path, output_path):
-                        self.logger.info(f"已生成 srs 规则文件: {output_path}")
+                        self.logger.info(f"已生成 srs 二进制规则文件: {output_path}")
                 finally:
                     if os.path.exists(tmp_path): os.unlink(tmp_path)
                 return
@@ -510,7 +505,6 @@ class RulesMerger:
             if os.path.exists(output_path): os.unlink(output_path)
 
     def _decompile_srs_to_json_str(self, input_path: str) -> str:
-        """反编译 srs，拿到原装的 JSON 字符串"""
         if not self.sing_box_path: return "{}"
         output_path = self._make_temp_path('.json')
         try:
@@ -523,12 +517,24 @@ class RulesMerger:
             if os.path.exists(output_path): os.unlink(output_path)
 
     def _convert_to_mrs(self, input_path: str, output_path: str, behavior: str) -> bool:
-        if not self.mihomo_path: return False
-        return subprocess.run([self.mihomo_path, 'convert-ruleset', behavior, 'text', input_path, output_path], capture_output=True).returncode == 0
+        if not self.mihomo_path: 
+            self.logger.error("未找到 mihomo 执行路径，无法编译二进制 MRS")
+            return False
+        res = subprocess.run([self.mihomo_path, 'convert-ruleset', behavior, 'text', input_path, output_path], capture_output=True, text=True)
+        if res.returncode != 0:
+            self.logger.error(f"mihomo 编译二进制失败: {res.stderr}")
+            return False
+        return True
 
     def _convert_to_srs(self, input_path: str, output_path: str) -> bool:
-        if not self.sing_box_path: return False
-        return subprocess.run([self.sing_box_path, 'rule-set', 'compile', '--output', output_path, input_path], capture_output=True).returncode == 0
+        if not self.sing_box_path: 
+            self.logger.error("未找到 sing-box 执行路径，无法编译二进制 SRS")
+            return False
+        res = subprocess.run([self.sing_box_path, 'rule-set', 'compile', '--output', output_path, input_path], capture_output=True, text=True)
+        if res.returncode != 0:
+            self.logger.error(f"sing-box 编译二进制失败: {res.stderr}")
+            return False
+        return True
 
 
 def main():
