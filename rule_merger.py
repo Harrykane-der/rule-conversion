@@ -24,7 +24,7 @@ DOMAIN_PATTERN = re.compile(
 
 MIHOMO_PATH = 'mihomo'
 SING_BOX_PATH = 'sing-box'
-SING_BOX_RULESET_VERSION = 5
+SING_BOX_RULESET_VERSION = 4
 
 # 扩展 sing-box 标准字段，加入 port 和 network
 SING_BOX_LIST_FIELDS = (
@@ -279,6 +279,9 @@ class RulesMerger:
     def _process_source(self, source: Dict, target_behavior: str) -> List[str]:
         """处理单个规则源"""
         rule_format = source.get('format', 'yaml')
+        if rule_format == 'jxon':
+            rule_format = 'json'
+            
         default_behavior = 'sing-box' if rule_format in ('json', 'srs') else 'classical'
         source_behavior = source.get('behavior', default_behavior)
         
@@ -310,8 +313,28 @@ class RulesMerger:
             if rule is None:
                 continue
             cleaned_rule = rule if source_behavior == 'sing-box' else self._clean_rule(str(rule))
-            transformed_rules = self._transform(cleaned_rule, source_behavior, target_behavior)
-            self.logger.debug(f"处理规则: {rule} -> {cleaned_rule} -> {transformed_rules}")
+            
+            # 【核心修复：跨行为合并解包逻辑】
+            # 1. 当上游是 sing-box JSON，而下游目标是纯文本行为（如 domain、classical 等）
+            if source_behavior == 'sing-box' and target_behavior in ('domain', 'classical', 'ipcidr'):
+                if target_behavior == 'domain':
+                    transformed_rules = self._sing_box_to_domain(cleaned_rule)
+                elif target_behavior == 'ipcidr':
+                    transformed_rules = self._sing_box_to_ipcidr(cleaned_rule)
+                else:
+                    transformed_rules = self._sing_box_to_classical(cleaned_rule)
+            # 2. 当上游是纯文本行为，而下游目标是 sing-box JSON 行为
+            elif source_behavior in ('domain', 'classical', 'ipcidr') and target_behavior == 'sing-box':
+                if source_behavior == 'domain':
+                    transformed_rules = [self._domain_to_sing_box(cleaned_rule)] if self._domain_to_sing_box(cleaned_rule) else []
+                elif source_behavior == 'ipcidr':
+                    transformed_rules = [self._ipcidr_to_sing_box(cleaned_rule)] if self._ipcidr_to_sing_box(cleaned_rule) else []
+                else:
+                    transformed_rules = [self._classical_to_sing_box(cleaned_rule)] if self._classical_to_sing_box(cleaned_rule) else []
+            # 3. 常规的同类行为对齐转换
+            else:
+                transformed_rules = self._transform(cleaned_rule, source_behavior, target_behavior)
+                
             if not transformed_rules:
                 continue
             converted_rules.extend(transformed_rules)
@@ -465,7 +488,6 @@ class RulesMerger:
                 continue
             
             key, values = converted
-            # 由于 values 现在为列表（如多个分割后的端口），这里统一用 extend 压入
             sing_box_rule[key].extend(values)
 
         return self._compact_sing_box_rules(sing_box_rule)
@@ -491,7 +513,6 @@ class RulesMerger:
             bucket[key].extend(self._as_list(rule.get(key)))
 
     def _compact_sing_box_rules(self, bucket: Dict[str, List[Any]]) -> List[Dict[str, List[Any]]]:
-        # 对端口进行特殊排序（整型优先排前面，字符串排后面）
         def port_sort_key(x):
             return (0, int(x)) if isinstance(x, int) else (0, int(x)) if str(x).isdigit() else (1, str(x))
 
@@ -541,11 +562,9 @@ class RulesMerger:
         if not target_key:
             return None
             
-        # 处理 NETWORK 字段（转为标准小写）
         if target_key == 'network':
             return target_key, [raw_value.lower()]
             
-        # 精准切分与处理以斜杠 / 分隔的多端口，以及范围（80-443）
         if target_key == 'port':
             port_list = []
             sub_ports = [p.strip() for p in raw_value.split('/')]
@@ -694,11 +713,9 @@ class RulesMerger:
                 if self._validate_classical_rule(classical_rule):
                     rules.append(classical_rule)
                     
-            # 补回反向转换：将 sing-box 的 port 字段反解回经典规则中的 DST-PORT
             for port in self._as_list(item.get('port')):
                 rules.append(f"DST-PORT,{port}")
                 
-            # 补回反向转换：将 sing-box 的 network 转回大写格式的 NETWORK
             for network in self._as_list(item.get('network')):
                 if isinstance(network, str):
                     rules.append(f"NETWORK,{network.upper()}")
