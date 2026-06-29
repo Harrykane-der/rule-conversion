@@ -1,4 +1,4 @@
-name: Unified Rule Build (Singbox + Mihomo)
+name: Unified Rule Build (Singbox + Mihomo Release)
 
 on:
   schedule:
@@ -9,13 +9,14 @@ on:
     paths:
       - "local/**/*.json"
       - "rule_merger.py"
+      - "config.yaml"
       - "**/*.py"
 
 permissions:
   contents: write
 
 concurrency:
-  group: unified-rule-build
+  group: unified-rule-release
   cancel-in-progress: true
 
 jobs:
@@ -70,34 +71,83 @@ jobs:
           sing-box version
 
       # =========================
-      # Build Sing-box rules
+      # Build rules (python engine)
       # =========================
-      - name: Build Sing-box rules
+      - name: Build rules
         run: |
           set -e
 
-          SB_OUT="/tmp/release/singbox"
-          rm -rf "$SB_OUT"
-          mkdir -p "$SB_OUT"
+          export OUTPUT_DIR="/tmp/release/mihomo"
 
-          mapfile -d '' files < <(find local -type f -name "*.json" -print0)
+          echo "OUTPUT_DIR = $OUTPUT_DIR"
 
-          echo "Sing-box rules: ${#files[@]}"
+          python rule_merger.py
 
-          for f in "${files[@]}"; do
-            out="$SB_OUT/${f#local/}"
-            out="${out%.json}.srs"
+      # =========================
+      # Debug check (防空目录崩溃关键)
+      # =========================
+      - name: Check outputs
+        run: |
+          echo "===== singbox ====="
+          ls -R /tmp/release/singbox || true
 
-            mkdir -p "$(dirname "$out")"
+          echo "===== mihomo ====="
+          ls -R /tmp/release/mihomo || true
 
-            echo "compile: $f -> $out"
+      # =========================
+      # Publish to release branch
+      # =========================
+      - name: Publish to release branch
+        run: |
+          set -e
 
-            sing-box rule-set compile \
-              --output "$out" \
-              "$f"
-          done
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          date -u +"%Y%m%d-%H%M%S" > "$SB_OUT/VERSION"
+          git fetch origin
+
+          if git show-ref --verify --quiet refs/remotes/origin/release; then
+            git checkout release
+            git pull origin release
+          else
+            git checkout -b release
+          fi
+
+          # 清空工作区（保留 git）
+          find . -mindepth 1 -maxdepth 1 ! -name ".git" -exec rm -rf {} +
+
+          mkdir -p singbox mihomo
+
+          # =========================
+          # singbox output
+          # =========================
+          if [ -d /tmp/release/singbox ] && [ "$(ls -A /tmp/release/singbox 2>/dev/null)" ]; then
+            cp -r /tmp/release/singbox/* singbox/
+          else
+            echo "⚠️ singbox empty"
+          fi
+
+          # =========================
+          # mihomo output (关键修复)
+          # =========================
+          if [ -d /tmp/release/mihomo ] && [ "$(ls -A /tmp/release/mihomo 2>/dev/null)" ]; then
+            cp -r /tmp/release/mihomo/* mihomo/
+          else
+            echo "❌ mihomo empty (check rule_merger output)"
+          fi
+
+          # version file
+          echo "$(date -u +%Y%m%d-%H%M%S)" > VERSION
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+
+          git commit -m "Unified rule release $(date -u +%Y%m%d-%H%M%S)"
+          git push origin release          date -u +"%Y%m%d-%H%M%S" > "$SB_OUT/VERSION"
 
       # =========================
       # Mihomo rule merger
