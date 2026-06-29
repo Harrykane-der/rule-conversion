@@ -66,9 +66,9 @@ class RulesMerger:
         return path
 
     def _new_pool(self) -> Dict[str, Set[str]]:
-        """创建一个干净的原子规则池，包含新增的端口、网络、应用进程桶"""
+        """创建一个干净的原子规则池，包含所有高级字段"""
         pool = {field: set() for field in SING_BOX_LIST_FIELDS}
-        pool['other'] = set()  # 容纳无法归类的扁平规则串
+        pool['other'] = set()  # 容纳无法归类的特殊文本规则串
         return pool
 
     def _fetch_http_rules(self, url: str, rule_format: str) -> List[str]:
@@ -101,7 +101,10 @@ class RulesMerger:
                 with open(tmp_path, 'wb') as tmp_in:
                     tmp_in.write(response.content)
                 try:
-                    behavior = 'domain' if 'domain' in url.lower() else ('ipcidr' if 'ip' in url.lower() else 'classical')
+                    # 尽可能全面地读取 mrs
+                    behavior = 'classical'
+                    if 'domain' in url.lower(): behavior = 'domain'
+                    elif 'ip' in url.lower(): behavior = 'ipcidr'
                     return self._read_mrs_file(tmp_path, behavior)
                 finally:
                     if os.path.exists(tmp_path): os.unlink(tmp_path)
@@ -167,9 +170,12 @@ class RulesMerger:
         return rule.strip()
 
     def _parse_and_flatten_to_pool(self, raw_rules: List[str], format_type: str, behavior: str, pool: Dict[str, Set[str]]):
-        """把所有跨平台格式的规则彻底揉碎，映射到高兼容性的原子池中"""
+        """
+        【突破性修复】智能探测文本源格式，无论外界配置是 classical、domain 还是 ipcidr，
+        都同时进行全格式解析，避免因为规则格式不匹配引发的“无法转换、丢失规则”情况。
+        """
         if format_type in ('json', 'srs') or (len(raw_rules) == 1 and raw_rules[0].strip().startswith('{')):
-            # sing-box JSON 格式直接交由原子提取器递归处理
+            # sing-box JSON 家族解包流程
             for content in raw_rules:
                 try:
                     data = json.loads(content.lstrip('\ufeff'))
@@ -180,65 +186,71 @@ class RulesMerger:
                     self.logger.debug(f"解析 sing-box 元素失败: {e}")
             return
 
-        # 传统文本类格式 (Classical / Domain / IP-CIDR)
+        # 文本类规则源（Mihomo 文本、YAML 或者是扁平列表）
         for rule in raw_rules:
             cleaned = self._clean_rule(str(rule))
             if not cleaned:
                 continue
 
-            # 处理纯 domain 行为的扁平列表
-            if behavior == 'domain':
-                d = cleaned[2:] if cleaned.startswith('+.') else cleaned
-                if DOMAIN_PATTERN.match(d):
-                    if cleaned.startswith('+.'): pool['domain_suffix'].add(d)
-                    else: pool['domain'].add(d)
-                continue
-            # 处理纯 ipcidr 行为的扁平列表
-            elif behavior == 'ipcidr':
-                try:
-                    ipaddress.ip_network(cleaned, strict=False)
-                    pool['ip_cidr'].add(cleaned)
-                except ValueError:
-                    pass
-                continue
-
-            # 处理带有类型前缀的 Mihomo / Clash Classical 规则
+            # --- 步骤 1: 尝试解析带前缀的经典 Mihomo/Clash 规则 ---
             parts = [p.strip() for p in cleaned.split(',')]
-            if len(parts) < 2:
-                continue
-            
-            req_type = parts[0].upper()
-            val = parts[1]
+            if len(parts) >= 2:
+                req_type = parts[0].upper()
+                val = parts[1]
 
-            # 核心双向映射与格式转换
-            if req_type == 'DOMAIN':
-                if DOMAIN_PATTERN.match(val): pool['domain'].add(val)
-            elif req_type == 'DOMAIN-SUFFIX':
-                if DOMAIN_PATTERN.match(val): pool['domain_suffix'].add(val)
-            elif req_type == 'DOMAIN-KEYWORD':
-                pool['domain_keyword'].add(val)
-            elif req_type == 'DOMAIN-REGEX':
-                pool['domain_regex'].add(val)
-            elif req_type in ('IP-CIDR', 'IP-CIDR6'):
-                try:
-                    ipaddress.ip_network(val, strict=False)
-                    pool['ip_cidr'].add(val)
-                except ValueError:
-                    pass
-            elif req_type in ('DST-PORT', 'PORT'):
-                # 适配端口规则（DST-PORT -> port）
-                pool['port'].add(val)
-            elif req_type == 'NETWORK':
-                # 适配网络层规则（NETWORK -> network），强制转小写
-                pool['network'].add(val.lower())
-            elif req_type == 'PROCESS-NAME':
-                # 适配进程规则（PROCESS-NAME -> package_name）
-                pool['package_name'].add(val)
-            elif req_type == 'PROCESS-NAME-REGEX':
-                # 适配正则进程规则（PROCESS-NAME-REGEX -> package_name_regex）
-                pool['package_name_regex'].add(val)
+                if req_type == 'DOMAIN':
+                    if DOMAIN_PATTERN.match(val): pool['domain'].add(val)
+                    continue
+                elif req_type == 'DOMAIN-SUFFIX':
+                    if DOMAIN_PATTERN.match(val): pool['domain_suffix'].add(val)
+                    continue
+                elif req_type == 'DOMAIN-KEYWORD':
+                    pool['domain_keyword'].add(val)
+                    continue
+                elif req_type == 'DOMAIN-REGEX':
+                    pool['domain_regex'].add(val)
+                    continue
+                elif req_type in ('IP-CIDR', 'IP-CIDR6'):
+                    try:
+                        ipaddress.ip_network(val, strict=False)
+                        pool['ip_cidr'].add(val)
+                    except ValueError:
+                        pass
+                    continue
+                elif req_type in ('DST-PORT', 'PORT'):
+                    pool['port'].add(val)
+                    continue
+                elif req_type == 'NETWORK':
+                    pool['network'].add(val.lower())
+                    continue
+                elif req_type == 'PROCESS-NAME':
+                    pool['package_name'].add(val)
+                    continue
+                elif req_type == 'PROCESS-NAME-REGEX':
+                    pool['package_name_regex'].add(val)
+                    continue
+
+            # --- 步骤 2: 降级适配无前缀的纯列表（Domain 或 IP-CIDR） ---
+            # 如果是带 +. 开头的域名后缀（如 Clash 扁平 Domain 规则）
+            if cleaned.startswith('+.'):
+                d = cleaned[2:]
+                if DOMAIN_PATTERN.match(d):
+                    pool['domain_suffix'].add(d)
+                continue
+
+            # 尝试作为纯 IP 检测
+            try:
+                ipaddress.ip_network(cleaned, strict=False)
+                pool['ip_cidr'].add(cleaned)
+                continue
+            except ValueError:
+                pass
+
+            # 最终尝试作为纯域名检测
+            if DOMAIN_PATTERN.match(cleaned):
+                pool['domain'].add(cleaned)
             else:
-                # 无法分拣或未注册的特殊附加规则全串留存
+                # 仍无法识别的保留到 other 桶
                 pool['other'].add(cleaned)
 
     def _extract_sing_box_atom(self, rule_obj: Any, pool: Dict[str, Set[str]]):
@@ -261,7 +273,6 @@ class RulesMerger:
                     for v in vals:
                         v_str = str(v).strip()
                         if v_str:
-                            # 如果是网络类型，强制转小写保持去重一致
                             if field == 'network': v_str = v_str.lower()
                             pool[field].add(v_str)
 
@@ -279,7 +290,7 @@ class RulesMerger:
 
             pool = self._new_pool()
 
-            # 1. 抓取所有源，一律打碎进池，从根本上杜绝重复
+            # 1. 抓取所有源
             for source_config in config['upstream'].values():
                 r_format = source_config.get('format', 'yaml')
                 def_b = 'sing-box' if r_format in ('json', 'srs') else 'classical'
@@ -293,7 +304,7 @@ class RulesMerger:
                 
                 self._parse_and_flatten_to_pool(raw_data, r_format, s_behavior, pool)
 
-            # 2. 从原子池中依照目标行为（Behavior）组装回需要的最终形态
+            # 2. 重新编译组合
             final_export_list = self._compile_pool_to_target(pool, target_behavior)
 
             # 3. 按照目标格式写出文件
@@ -318,7 +329,6 @@ class RulesMerger:
             return sorted(list(pool['ip_cidr']))
 
         if target_behavior == 'classical':
-            # 经典文本格式：将原子属性反向组装回带有大写前缀的 Mihomo / Clash 规则
             for d in sorted(pool['domain']): result.append(f"DOMAIN,{d}")
             for s in sorted(pool['domain_suffix']): result.append(f"DOMAIN-SUFFIX,{s}")
             for k in sorted(pool['domain_keyword']): result.append(f"DOMAIN-KEYWORD,{k}")
@@ -339,11 +349,9 @@ class RulesMerger:
             return result
 
         if target_behavior == 'sing-box':
-            # 目标为 sing-box 时，直接输出规范化去重后的大包 Headless Object
             sb_rule = {}
             for field in SING_BOX_LIST_FIELDS:
                 if pool[field]:
-                    # 针对端口数组中的纯数字进行整型转换优化，提升内核加载效率
                     if field == 'port':
                         sb_rule[field] = sorted([int(p) if p.isdigit() else p for p in pool[field]], key=lambda x: x if isinstance(x, int) else int(str(x).split(':')[0]) if ':' in str(x) else 0)
                     else:
@@ -369,7 +377,7 @@ class RulesMerger:
 
             if r_format == 'srs':
                 tmp = self._make_temp_path('.json')
-                self._write_sing_box_json(tmp, data_list, version)
+                self._write_sing_box_json(tmp, data_list, version, behavior)
                 try:
                     if self._convert_to_srs(tmp, path):
                         self.logger.info(f"已生成 srs 二进制规则: {path}")
@@ -378,8 +386,8 @@ class RulesMerger:
                 return
 
             if r_format == 'json':
-                self._write_sing_box_json(path, data_list, version)
-                self.logger.info(f"已生成 json 明文规则: {path}")
+                self._write_sing_box_json(path, data_list, version, behavior)
+                self.logger.info(f"已生成 json 规则: {path}")
                 return
 
             self._write_plain_text_or_yaml(path, data_list, r_format)
@@ -400,13 +408,16 @@ class RulesMerger:
                 for line in data_list:
                     f.write(f"{line}\n")
 
-    def _write_sing_box_json(self, path: str, data_list: List[Dict[str, Any]], version: int):
-        rule_set = {
-            'version': version,
-            'rules': data_list
-        }
+    def _write_sing_box_json(self, path: str, data_list: List[Any], version: int, behavior: str):
         with open(path, 'w', encoding='utf-8') as f:
-            json.dump(rule_set, f, ensure_ascii=False, indent=2)
+            if behavior in ('domain', 'ipcidr'):
+                json.dump(data_list, f, ensure_ascii=False, indent=2)
+            else:
+                rule_set = {
+                    'version': version,
+                    'rules': data_list
+                }
+                json.dump(rule_set, f, ensure_ascii=False, indent=2)
             f.write('\n')
 
     def _read_mrs_file(self, input_path: str, behavior: str) -> List[str]:
