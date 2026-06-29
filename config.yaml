@@ -83,6 +83,11 @@
       format: json
       behavior: singbox
 
+- path: output/ablock.json
+  format: json
+  behavior: sing-box
+  upstream: *ablock_upstream
+
 # ablock
 - path: output/adblock.mrs
   format: mrs
