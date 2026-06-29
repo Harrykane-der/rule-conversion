@@ -36,7 +36,6 @@ jobs:
           tar -xzf sing-box.tar.gz
           sudo mv sing-box-*/sing-box /usr/local/bin/sing-box
           sudo chmod +x /usr/local/bin/sing-box
-
           sing-box version
 
       - name: 编译 JSON → SRS
@@ -49,17 +48,16 @@ jobs:
           echo "检查 local 目录..."
           ls -R local || true
 
-          count=$(find local -type f -name "*.json" | wc -l)
-          echo "JSON 数量: $count"
+          mapfile -d '' files < <(find local -type f -name "*.json" -print0)
 
-          if [ "$count" -eq 0 ]; then
-            echo "❌ 没有 JSON 文件，退出"
+          echo "JSON 数量: ${#files[@]}"
+
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "❌ 没有 JSON 文件"
             exit 1
           fi
 
-          find local -type f -name "*.json" -print0 |
-          while IFS= read -r -d '' json_file; do
-
+          for json_file in "${files[@]}"; do
             srs_file="compiled-rules/${json_file#local/}"
             srs_file="${srs_file%.json}.srs"
 
@@ -67,55 +65,52 @@ jobs:
 
             echo "编译: $json_file -> $srs_file"
 
-            sing-box rule-set compile \
+            if ! sing-box rule-set compile \
               --output "$srs_file" \
-              "$json_file"
-
+              "$json_file"; then
+              echo "❌ 编译失败: $json_file"
+              exit 1
+            fi
           done
 
           echo "编译完成"
           find compiled-rules -name "*.srs" | sort
 
-      - name: 发布到 releases 分支
+      - name: 推送到 my-rules 分支
         run: |
           set -e
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if [ ! -d "compiled-rules" ] || [ -z "$(ls -A compiled-rules 2>/dev/null)" ]; then
-            echo "没有编译产物，跳过"
-            exit 0
-          fi
+          rm -rf /tmp/rules
+          mkdir -p /tmp/rules
+
+          cp -r compiled-rules/. /tmp/rules/
 
           git fetch origin
 
-          if git ls-remote --exit-code --heads origin releases; then
-            git checkout releases
-            git pull origin releases
+          # 切换或创建 my-rules 分支
+          if git show-ref --verify --quiet refs/remotes/origin/my-rules; then
+            git checkout my-rules
+            git pull origin my-rules
           else
-            git checkout --orphan releases
+            git checkout --orphan my-rules
           fi
 
-          # =========================
-          # ❗关键修复：不清空整个仓库
-          # =========================
+          # 清空旧内容（保留 .git）
+          find . -mindepth 1 -maxdepth 1 ! -name ".git" -exec rm -rf {} +
 
-          # 如果旧 compiled-rules 存在，先删掉旧的
-          rm -rf compiled-rules
-
-          # 覆盖写入新的 compiled-rules
-          mkdir -p compiled-rules
-          cp -a "$GITHUB_WORKSPACE/compiled-rules/." compiled-rules/
+          cp -r /tmp/rules/. .
 
           touch .nojekyll
 
-          git add compiled-rules .nojekyll
+          git add -A
 
           if git diff --cached --quiet; then
-            echo "No changes."
+            echo "No changes"
             exit 0
           fi
 
           git commit -m "Update rule sets"
-          git push origin releases
+          git push origin my-rules --force
