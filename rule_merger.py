@@ -228,25 +228,27 @@ class RulesMerger:
         with open(output_path, 'w', encoding='utf-8') as f: json.dump({'version': version, 'rules': rules}, f, ensure_ascii=False, indent=2)
 
     def _to_sing_box_item(self, rule: str, behavior: str) -> Optional[tuple[str, Any]]:
+        # 智能化规则处理：精准区分【后缀转换】与【正则保留】
         if behavior == 'domain':
-            # 只在明确是前缀时剥离
+            rule = rule.strip()
+            # 情况 1: 明确的前缀后缀，剥离并转换
             if rule.startswith(('+.', '*.')) and len(rule) > 2:
                 return 'domain_suffix', rule[2:]
+            # 情况 2: 包含通配符但非后缀模式，转为 domain_regex，严禁删除字符
+            if '*' in rule and not rule.startswith(('*.', '+.')):
+                regex = rule.replace('.', r'\.').replace('*', '.*')
+                return 'domain_regex', regex
+            # 情况 3: 普通域名
             return 'domain', rule
             
         if behavior == 'ipcidr': return 'ip_cidr', rule
         if behavior != 'classical': return None
+        
         parts = [p.strip() for p in rule.split(',')]
         if len(parts) < 2: return None
-        
         mapping = {'DOMAIN': 'domain', 'DOMAIN-SUFFIX': 'domain_suffix', 'DOMAIN-KEYWORD': 'domain_keyword', 'DOMAIN-REGEX': 'domain_regex', 'IP-CIDR': 'ip_cidr', 'IP-CIDR6': 'ip_cidr', 'PORT': 'port', 'DST-PORT': 'port', 'NETWORK': 'network'}
         target_key = mapping.get(parts[0])
-        
-        # 兼容 classical 格式：仅当前缀存在时才处理
-        if parts[0] == 'DOMAIN' and parts[1].startswith(('+.', '*.')) and len(parts[1]) > 2:
-            return 'domain_suffix', parts[1][2:]
-            
-        return (target_key, int(parts[1]) if target_key == 'port' and parts[1].isdigit() else (parts[1].lower() if target_key == 'network' else parts[1])) if target_key else None
+        return (target_key, parts[1]) if target_key else None
 
     def _classical_to_sing_box(self, rule: str) -> Optional[str]:
         item = self._to_sing_box_item(rule, 'classical')
@@ -267,14 +269,11 @@ class RulesMerger:
         parts = rule.split(',')
         if len(parts) < 2: return None
         suffix, domain = parts[0].strip(), parts[1].strip()
-        # 仅当前缀存在时转换
-        if suffix == 'DOMAIN' and domain.startswith(('+.', '*.')) and len(domain) > 2: 
-            suffix, domain = 'DOMAIN-SUFFIX', domain[2:]
+        if suffix == 'DOMAIN' and domain.startswith(('+.', '*.')) and len(domain) > 2: suffix, domain = 'DOMAIN-SUFFIX', domain[2:]
         return domain if suffix == 'DOMAIN' else (f"+.{domain}" if suffix == 'DOMAIN-SUFFIX' else None)
 
     def _validate_domain_rule(self, rule: str) -> Optional[str]:
-        clean = rule[2:] if rule.startswith(('+.', '*.')) else rule
-        return rule if DOMAIN_PATTERN.match(clean) else None
+        return rule if DOMAIN_PATTERN.match(rule.lstrip('*.+')) else None
 
     def _classical_to_ipcidr(self, rule: str) -> Optional[str]:
         parts = rule.split(',')
