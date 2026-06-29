@@ -1,0 +1,74 @@
+name: Compile Sing-box Rule Sets
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'local/**.json'      # 只在 rules 目录下的 json 文件变化时触发
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'rules/**.json'
+  workflow_dispatch:         # 允许手动触发
+  schedule:
+    - cron: '0 3 * * *'      # 每天 UTC 3点自动运行（可选）
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 安装 sing-box
+        run: |
+          wget -qO- https://github.com/SagerNet/sing-box/releases/latest/download/sing-box-latest-linux-amd64.tar.gz | tar -xz
+          sudo mv sing-box-*/sing-box /usr/local/bin/sing-box
+          sudo chmod +x /usr/local/bin/sing-box
+          sing-box version
+
+      - name: 编译 source → binary 规则集
+        run: |
+          mkdir -p compiled-rules
+          
+          echo "开始转换所有 source 规则集..."
+          find rules -type f -name "*.json" | while read -r file; do
+            # 保留相对目录结构
+            rel_path="${file#rules/}"
+            target_dir="compiled-rules/$(dirname "$rel_path")"
+            mkdir -p "$target_dir"
+            
+            target="\( {target_dir}/ \)(basename "${file%.json}.srs")"
+            
+            echo "转换: $file → $target"
+            sing-box rule-set compile --output "$target" "$file"
+          done
+
+          echo "转换完成！共生成以下文件："
+          find compiled-rules -type f -name "*.srs" | head -20
+
+      - name: 提交并推送生成的 .srs 文件
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          git add compiled-rules/
+          
+          if git diff --cached --quiet; then
+            echo "没有新的 .srs 文件需要提交"
+          else
+            git commit -m "chore: 自动编译 rule-set binary 文件 $(date +'%Y-%m-%d %H:%M:%S')"
+            git push
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 上传 artifacts（可选）
+        uses: actions/upload-artifact@v4
+        with:
+          name: sing-box-rule-sets-binary
+          path: compiled-rules/
+          retention-days: 7
