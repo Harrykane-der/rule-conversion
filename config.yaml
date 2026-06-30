@@ -88,6 +88,11 @@
   behavior: sing-box
   upstream: *ablock_upstream
 
+- path: output/ablock.yaml
+  format: yaml 
+  behavior: classical
+  upstream: *ablock_upstream
+
 # ablock
 - path: output/adblock.mrs
   format: mrs
