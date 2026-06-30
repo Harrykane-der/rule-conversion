@@ -42,7 +42,6 @@ CLASSICAL_TO_SB = {
     'DOMAIN-REGEX': 'domain_regex',
     'IP-CIDR': 'ip_cidr',
     'IP-CIDR6': 'ip_cidr',
-    'PORT': 'port',
     'DST-PORT': 'port',
     'NETWORK': 'network'
 }
