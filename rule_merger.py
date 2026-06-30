@@ -34,7 +34,7 @@ SING_BOX_LIST_FIELDS = (
     'domain_regex', 'ip_cidr', 'port', 'network'
 )
 
-# Classical 类型到 Sing‑Box 字段的映射
+# Classical 类型到 Sing‑Box 字段的映射（只含 DST-PORT）
 CLASSICAL_TO_SB = {
     'DOMAIN': 'domain',
     'DOMAIN-SUFFIX': 'domain_suffix',
@@ -42,7 +42,7 @@ CLASSICAL_TO_SB = {
     'DOMAIN-REGEX': 'domain_regex',
     'IP-CIDR': 'ip_cidr',
     'IP-CIDR6': 'ip_cidr',
-    'DST-PORT': 'port',
+    'DST-PORT': 'port',          # 仅 DST-PORT，无 PORT
     'NETWORK': 'network'
 }
 
@@ -332,7 +332,12 @@ class RulesMerger:
             return None
         value = parts[1]
         if field == 'port':
-            value = int(value) if value.isdigit() else value
+            # 支持 / 分隔的多个端口/范围，拆分为列表
+            if '/' in value:
+                value = [v.strip() for v in value.split('/') if v.strip()]
+            else:
+                # 单个值，但仍可作为列表处理
+                value = [value]
         elif field == 'network':
             value = value.lower()
         return (field, value)
@@ -341,7 +346,11 @@ class RulesMerger:
         if not self._validate_classical_rule(rule):
             return None
         item = self._to_sing_box_item(rule, 'classical')
-        return json.dumps({item[0]: [item[1]]}) if item else None
+        if not item:
+            return None
+        field, val = item
+        # val 可能是列表（多个端口）
+        return json.dumps({field: val})
 
     def _domain_to_sing_box(self, rule: str) -> Optional[str]:
         if not self._validate_domain_rule(rule):
@@ -393,6 +402,7 @@ class RulesMerger:
                 result.append(str(ip))
         return result
 
+    # 修改点：合并端口为一条 DST-PORT，用 / 分隔
     def _sing_box_to_classical(self, rule_str: str) -> List[str]:
         parsed = self._parse_sing_box_rule(rule_str)
         if not parsed:
@@ -411,12 +421,19 @@ class RulesMerger:
             for ip in self._as_list(item.get('ip_cidr')):
                 prefix = "IP-CIDR6" if ':' in str(ip) else "IP-CIDR"
                 result.append(f"{prefix},{ip}")
-            for p in self._as_list(item.get('port')):
-                result.append(f"PORT,{p}")
             for n in self._as_list(item.get('network')):
                 result.append(f"NETWORK,{str(n).lower()}")
+            
+            # 处理 port：合并所有端口为一条 DST-PORT
+            ports = self._as_list(item.get('port'))
+            if ports:
+                # 将所有端口转为字符串，并用 "/" 连接
+                port_strs = [str(p) for p in ports]
+                joined = "/".join(port_strs)
+                result.append(f"DST-PORT,{joined}")
         return result
 
+    # 修改点：验证只支持 DST-PORT，不支持 PORT
     def _validate_classical_rule(self, rule: str) -> Optional[str]:
         try:
             parts = [p.strip() for p in rule.split(',')]
@@ -429,8 +446,17 @@ class RulesMerger:
                 return rule if self._get_ipcidr_version(value) == 4 else None
             if prefix == 'IP-CIDR6':
                 return rule if self._get_ipcidr_version(value) == 6 else None
-            if prefix in ('PORT', 'DST-PORT'):
-                return rule if PORT_PATTERN.match(value) else None
+            # 只允许 DST-PORT，拒绝 PORT
+            if prefix == 'DST-PORT':
+                # 如果 value 包含 '/'，则拆分检查每个部分
+                if '/' in value:
+                    for part in value.split('/'):
+                        part = part.strip()
+                        if part and not PORT_PATTERN.match(part):
+                            return None
+                    return rule
+                else:
+                    return rule if PORT_PATTERN.match(value) else None
             if prefix == 'NETWORK':
                 return rule if value.lower() in ('tcp', 'udp') else None
             return rule
