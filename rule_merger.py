@@ -31,10 +31,10 @@ SING_BOX_PATH = 'sing-box'
 SING_BOX_RULESET_VERSION = 5
 SING_BOX_LIST_FIELDS = (
     'domain', 'domain_suffix', 'domain_keyword',
-    'domain_regex', 'ip_cidr', 'port', 'network'
+    'domain_regex', 'ip_cidr', 'port', 'port_range', 'network'
 )
 
-# Classical 类型到 Sing‑Box 字段的映射（只含 DST-PORT）
+# Classical 类型到 Sing‑Box 字段的映射（仅 DST-PORT）
 CLASSICAL_TO_SB = {
     'DOMAIN': 'domain',
     'DOMAIN-SUFFIX': 'domain_suffix',
@@ -42,7 +42,7 @@ CLASSICAL_TO_SB = {
     'DOMAIN-REGEX': 'domain_regex',
     'IP-CIDR': 'ip_cidr',
     'IP-CIDR6': 'ip_cidr',
-    'DST-PORT': 'port',          # 仅 DST-PORT，无 PORT
+    'DST-PORT': 'port',          # 占位，实际转换时会分离 port 和 port_range
     'NETWORK': 'network'
 }
 
@@ -121,20 +121,15 @@ class RulesMerger:
         domain = rule[2:] if rule.startswith('+.') else rule
         return rule if DOMAIN_PATTERN.match(domain) else None
 
-    # 新增：规则签名归一化（用于去重）
     @staticmethod
     def _normalize_rule_signature(rule: Any) -> str:
         """生成规则的归一化签名，用于去重"""
         if isinstance(rule, dict):
-            # 对字典按key排序，统一JSON序列化
             return json.dumps(rule, ensure_ascii=False, sort_keys=True)
         if isinstance(rule, str):
-            # 去除首尾空白，统一小写（域名/IP不区分大小写）
             s = rule.strip().lower()
-            # 统一 IP-CIDR 和 IP-CIDR6 前缀（只保留 ip-cidr 部分）
             if s.startswith('ip-cidr6,'):
-                s = 'ip-cidr,' + s[9:]  # 去掉6
-            # 统一 domain-suffix 表示（去掉前导点）
+                s = 'ip-cidr,' + s[9:]
             if s.startswith('domain-suffix,.'):
                 s = 'domain-suffix,' + s[15:]
             return s
@@ -168,7 +163,6 @@ class RulesMerger:
                 if cleaned.startswith('*.'):
                     cleaned = '+.' + cleaned[2:]
                 rule = cleaned
-            # 转换并记录
             transformed = self._transform(rule, source_behavior, target_behavior)
             if not transformed:
                 logger.warning(f"规则转换失败，已丢弃: {rule} (源行为: {source_behavior}, 目标: {target_behavior})")
@@ -255,10 +249,9 @@ class RulesMerger:
         target_behavior = self._normalize_behavior(target_behavior)
         self._stats['total'] += 1
 
-        # 处理 dict 类型（原生 sing‑box 规则）
         if isinstance(rule, dict):
             if target_behavior == 'sing-box':
-                return [rule]  # 无需转换
+                return [rule]
             transformer = self._transformers.get(('sing-box', target_behavior))
             if transformer:
                 result = transformer(json.dumps(rule))
@@ -315,6 +308,49 @@ class RulesMerger:
             return f"DOMAIN-SUFFIX,{domain}" if DOMAIN_PATTERN.match(domain) else None
         return f"DOMAIN,{rule}" if DOMAIN_PATTERN.match(rule) else None
 
+    # 修改：专门处理 DST-PORT，分离端口和范围
+    def _classical_to_sing_box(self, rule: str) -> Optional[str]:
+        if not self._validate_classical_rule(rule):
+            return None
+        parts = [p.strip() for p in rule.split(',')]
+        if len(parts) < 2 or parts[0] != 'DST-PORT':
+            return None
+        port_expr = parts[1]
+        if '/' in port_expr:
+            items = [x.strip() for x in port_expr.split('/') if x.strip()]
+        else:
+            items = [port_expr]
+
+        port_list = []
+        port_range_list = []
+        for item in items:
+            if '-' in item:
+                # 范围，转为 x:y
+                port_range_list.append(item.replace('-', ':'))
+            else:
+                # 单个端口
+                port_list.append(item)
+
+        result = {}
+        if port_list:
+            result['port'] = port_list
+        if port_range_list:
+            result['port_range'] = port_range_list
+        return json.dumps(result) if result else None
+
+    def _domain_to_sing_box(self, rule: str) -> Optional[str]:
+        if not self._validate_domain_rule(rule):
+            return None
+        item = self._to_sing_box_item(rule, 'domain')
+        return json.dumps({item[0]: [item[1]]}) if item else None
+
+    def _ipcidr_to_sing_box(self, rule: str) -> Optional[str]:
+        if not self._validate_ipcidr_rule(rule):
+            return None
+        item = self._to_sing_box_item(rule, 'ipcidr')
+        return json.dumps({item[0]: [item[1]]}) if item else None
+
+    # 辅助函数（供其他转换使用）
     def _to_sing_box_item(self, rule: str, behavior: str) -> Optional[tuple]:
         if behavior == 'domain':
             if rule.startswith('+.'):
@@ -331,38 +367,10 @@ class RulesMerger:
         if not field:
             return None
         value = parts[1]
-        if field == 'port':
-            # 支持 / 分隔的多个端口/范围，拆分为列表
-            if '/' in value:
-                value = [v.strip() for v in value.split('/') if v.strip()]
-            else:
-                # 单个值，但仍可作为列表处理
-                value = [value]
-        elif field == 'network':
+        # 注意：这里不再处理 port，因为 _classical_to_sing_box 已单独处理
+        if field == 'network':
             value = value.lower()
         return (field, value)
-
-    def _classical_to_sing_box(self, rule: str) -> Optional[str]:
-        if not self._validate_classical_rule(rule):
-            return None
-        item = self._to_sing_box_item(rule, 'classical')
-        if not item:
-            return None
-        field, val = item
-        # val 可能是列表（多个端口）
-        return json.dumps({field: val})
-
-    def _domain_to_sing_box(self, rule: str) -> Optional[str]:
-        if not self._validate_domain_rule(rule):
-            return None
-        item = self._to_sing_box_item(rule, 'domain')
-        return json.dumps({item[0]: [item[1]]}) if item else None
-
-    def _ipcidr_to_sing_box(self, rule: str) -> Optional[str]:
-        if not self._validate_ipcidr_rule(rule):
-            return None
-        item = self._to_sing_box_item(rule, 'ipcidr')
-        return json.dumps({item[0]: [item[1]]}) if item else None
 
     def _parse_sing_box_rule(self, rule_str: str) -> Optional[Dict[str, Any]]:
         try:
@@ -402,7 +410,7 @@ class RulesMerger:
                 result.append(str(ip))
         return result
 
-    # 修改点：合并端口为一条 DST-PORT，用 / 分隔
+    # 修改：同时提取 port 和 port_range，合并为一条 DST-PORT
     def _sing_box_to_classical(self, rule_str: str) -> List[str]:
         parsed = self._parse_sing_box_rule(rule_str)
         if not parsed:
@@ -423,17 +431,20 @@ class RulesMerger:
                 result.append(f"{prefix},{ip}")
             for n in self._as_list(item.get('network')):
                 result.append(f"NETWORK,{str(n).lower()}")
-            
-            # 处理 port：合并所有端口为一条 DST-PORT
-            ports = self._as_list(item.get('port'))
-            if ports:
-                # 将所有端口转为字符串，并用 "/" 连接
-                port_strs = [str(p) for p in ports]
-                joined = "/".join(port_strs)
+
+            # 合并 port 和 port_range
+            port_items = []
+            for p in self._as_list(item.get('port')):
+                port_items.append(str(p))
+            for pr in self._as_list(item.get('port_range')):
+                # 将 x:y 转回 x-y
+                port_items.append(str(pr).replace(':', '-'))
+            if port_items:
+                joined = "/".join(port_items)
                 result.append(f"DST-PORT,{joined}")
         return result
 
-    # 修改点：验证只支持 DST-PORT，不支持 PORT
+    # 验证：支持 DST-PORT 中的范围和多个项目
     def _validate_classical_rule(self, rule: str) -> Optional[str]:
         try:
             parts = [p.strip() for p in rule.split(',')]
@@ -446,9 +457,7 @@ class RulesMerger:
                 return rule if self._get_ipcidr_version(value) == 4 else None
             if prefix == 'IP-CIDR6':
                 return rule if self._get_ipcidr_version(value) == 6 else None
-            # 只允许 DST-PORT，拒绝 PORT
             if prefix == 'DST-PORT':
-                # 如果 value 包含 '/'，则拆分检查每个部分
                 if '/' in value:
                     for part in value.split('/'):
                         part = part.strip()
@@ -473,10 +482,8 @@ class RulesMerger:
             default_behavior = 'sing-box' if target_format in ('json', 'srs') else 'classical'
             target_behavior = self._normalize_behavior(config.get('behavior', default_behavior))
 
-            # 重置统计
             self._stats = {'total': 0, 'converted': 0, 'dropped': 0, 'duplicates': 0}
 
-            # 收集所有规则（转换至目标格式）
             all_rules = []
             for source_config in config['upstream'].values():
                 rules = self._fetch_rules_from_source(source_config, target_behavior)
@@ -484,9 +491,7 @@ class RulesMerger:
 
             logger.info(f"原始输入规则数: {self._stats['total']}, 成功转换: {self._stats['converted']}, 丢弃: {self._stats['dropped']}")
 
-            # 统一去重（根据目标格式采用不同策略）
             if target_behavior == 'sing-box':
-                # 所有规则应为 dict 或 JSON 字符串，统一转为 dict
                 dict_rules = []
                 for r in all_rules:
                     if isinstance(r, dict):
@@ -502,7 +507,6 @@ class RulesMerger:
                         logger.warning(f"未知类型规则，已丢弃: {r}")
                         self._stats['dropped'] += 1
 
-                # 去重（基于JSON签名）
                 seen = set()
                 unique_dict = []
                 for r in dict_rules:
@@ -513,12 +517,9 @@ class RulesMerger:
                     else:
                         self._stats['duplicates'] += 1
 
-                # 压缩合并（将简单规则合并到同一字段）
                 final_rules = self._compile_final_sing_box_list(unique_dict)
             else:
-                # 目标为 classical/domain/ipcidr，所有规则应为字符串
                 str_rules = [str(r) for r in all_rules if r is not None]
-                # 去重（基于归一化签名）
                 seen = set()
                 unique_strs = []
                 for r in str_rules:
@@ -532,7 +533,6 @@ class RulesMerger:
 
             logger.info(f"去重后规则数: {len(final_rules)}, 重复项: {self._stats['duplicates']}")
 
-            # 写入文件
             output_file = config['path']
             self._write_rules(
                 output_file,
@@ -543,7 +543,6 @@ class RulesMerger:
             )
 
     def _compile_final_sing_box_list(self, rules: List[Dict]) -> List[Dict]:
-        """将规则列表压缩合并（按字段聚合）"""
         bucket = {key: [] for key in SING_BOX_LIST_FIELDS}
         passthrough_rules = []
 
@@ -554,7 +553,6 @@ class RulesMerger:
                 passthrough_rules.append(rule)
 
         compacted = self._compact_sing_box_rules(bucket)
-        # 最终去重（合并后可能重复）
         all_rules = compacted + passthrough_rules
         seen = set()
         unique = []
@@ -601,6 +599,9 @@ class RulesMerger:
                     sorted_vals = sorted(str(v) for v in unique)
                 else:
                     sorted_vals = sorted(int(v) for v in unique)
+            elif key == 'port_range':
+                # 按字符串排序
+                sorted_vals = sorted(str(v) for v in unique)
             else:
                 sorted_vals = sorted(unique, key=lambda x: str(x))
             compacted.append({key: sorted_vals})
