@@ -34,7 +34,6 @@ SING_BOX_LIST_FIELDS = (
     'domain_regex', 'ip_cidr', 'port', 'port_range', 'network'
 )
 
-# Classical 类型到 Sing‑Box 字段的映射（包含所有字段）
 CLASSICAL_TO_SB = {
     'DOMAIN': 'domain',
     'DOMAIN-SUFFIX': 'domain_suffix',
@@ -42,14 +41,12 @@ CLASSICAL_TO_SB = {
     'DOMAIN-REGEX': 'domain_regex',
     'IP-CIDR': 'ip_cidr',
     'IP-CIDR6': 'ip_cidr',
-    'DST-PORT': 'port',          # 占位，实际转换时会分离 port 和 port_range
+    'DST-PORT': 'port',
     'NETWORK': 'network'
 }
 
 
 class RulesMerger:
-    """规则合并器：从多种来源读取规则，在不同格式间转换并输出"""
-
     def __init__(self, config_path: str):
         self.config = self._load_config(config_path)
         self.mihomo_path = MIHOMO_PATH
@@ -71,7 +68,6 @@ class RulesMerger:
     # -------------------- 通用工具方法 --------------------
     @staticmethod
     def _normalize_behavior(behavior: Optional[str]) -> str:
-        """统一 behavior 命名规范"""
         if not behavior:
             return 'classical'
         b = behavior.strip().lower()
@@ -123,7 +119,6 @@ class RulesMerger:
 
     @staticmethod
     def _normalize_rule_signature(rule: Any) -> str:
-        """生成规则的归一化签名，用于去重"""
         if isinstance(rule, dict):
             return json.dumps(rule, ensure_ascii=False, sort_keys=True)
         if isinstance(rule, str):
@@ -137,9 +132,7 @@ class RulesMerger:
 
     @staticmethod
     def _sort_port_items(items: List[str]) -> List[str]:
-        """对端口项（单端口或范围）进行排序，按起始端口升序"""
         def key_func(item: str) -> int:
-            # 提取起始端口号
             if '-' in item:
                 start = item.split('-')[0].strip()
             else:
@@ -147,18 +140,13 @@ class RulesMerger:
             try:
                 return int(start)
             except ValueError:
-                return 0  # 容错
+                return 0
         return sorted(items, key=key_func)
 
     @staticmethod
     def _merge_port_items(items: List[str]) -> List[str]:
-        """
-        合并端口项：将单个端口和范围合并，消除重叠/相邻范围。
-        例如 ['200', '200-211'] -> ['200-211']
-        """
         if not items:
             return []
-        # 将每个项转为 (start, end) 元组
         ranges = []
         for item in items:
             if '-' in item:
@@ -168,21 +156,17 @@ class RulesMerger:
             else:
                 start = end = int(item.strip())
             ranges.append((start, end))
-        # 按 start 排序
         ranges.sort(key=lambda x: x[0])
-        # 合并重叠/相邻
         merged = []
         for start, end in ranges:
             if not merged:
                 merged.append([start, end])
             else:
                 last_start, last_end = merged[-1]
-                # 如果当前范围与上一个重叠或相邻（相邻：end+1 >= next_start）
                 if start <= last_end + 1:
                     merged[-1][1] = max(last_end, end)
                 else:
                     merged.append([start, end])
-        # 转回字符串
         result = []
         for start, end in merged:
             if start == end:
@@ -327,7 +311,7 @@ class RulesMerger:
             return []
         return result if isinstance(result, list) else [result] if result else []
 
-    # -------------------- 格式间转换器（私有） --------------------
+    # -------------------- 格式间转换器 --------------------
     def _classical_to_ipcidr(self, rule: str) -> Optional[str]:
         parts = rule.split(',')
         if len(parts) < 2:
@@ -364,7 +348,6 @@ class RulesMerger:
             return f"DOMAIN-SUFFIX,{domain}" if DOMAIN_PATTERN.match(domain) else None
         return f"DOMAIN,{rule}" if DOMAIN_PATTERN.match(rule) else None
 
-    # 改进：支持所有 Classical 规则（不仅仅是 DST-PORT）
     def _classical_to_sing_box(self, rule: str) -> Optional[str]:
         if not self._validate_classical_rule(rule):
             return None
@@ -374,17 +357,19 @@ class RulesMerger:
         prefix = parts[0]
 
         if prefix == 'DST-PORT':
-            # 端口特殊处理（分离单端口和范围），并去重
             port_expr = parts[1]
             if '/' in port_expr:
                 items = [x.strip() for x in port_expr.split('/') if x.strip()]
             else:
                 items = [port_expr]
-            # 去重（保留顺序）
+            # 去重 -> 排序 -> 合并范围
             unique_items = list(dict.fromkeys(items))
+            sorted_items = self._sort_port_items(unique_items)
+            merged_items = self._merge_port_items(sorted_items)
+
             port_list = []
             port_range_list = []
-            for item in unique_items:
+            for item in merged_items:
                 if '-' in item:
                     port_range_list.append(item.replace('-', ':'))
                 else:
@@ -397,12 +382,10 @@ class RulesMerger:
             return json.dumps(result) if result else None
 
         else:
-            # 通用转换：DOMAIN, DOMAIN-SUFFIX, DOMAIN-KEYWORD, DOMAIN-REGEX, NETWORK 等
             item = self._to_sing_box_item(rule, 'classical')
             if not item:
                 return None
             field, value = item
-            # Sing‑Box 要求字段值为数组
             if not isinstance(value, list):
                 value = [value]
             return json.dumps({field: value})
@@ -419,7 +402,6 @@ class RulesMerger:
         item = self._to_sing_box_item(rule, 'ipcidr')
         return json.dumps({item[0]: [item[1]]}) if item else None
 
-    # 辅助函数（供其他转换使用）
     def _to_sing_box_item(self, rule: str, behavior: str) -> Optional[tuple]:
         if behavior == 'domain':
             if rule.startswith('+.'):
@@ -436,7 +418,6 @@ class RulesMerger:
         if not field:
             return None
         value = parts[1]
-        # 注意：这里不再处理 port，因为 _classical_to_sing_box 已单独处理
         if field == 'network':
             value = value.lower()
         return (field, value)
@@ -479,7 +460,6 @@ class RulesMerger:
                 result.append(str(ip))
         return result
 
-    # 修改：同时提取 port 和 port_range，合并为一条 DST-PORT，并去重 + 排序 + 合并范围
     def _sing_box_to_classical(self, rule_str: str) -> List[str]:
         parsed = self._parse_sing_box_rule(rule_str)
         if not parsed:
@@ -501,14 +481,12 @@ class RulesMerger:
             for n in self._as_list(item.get('network')):
                 result.append(f"NETWORK,{str(n).lower()}")
 
-            # 合并 port 和 port_range，并去重 + 排序 + 合并范围
             port_items = []
             for p in self._as_list(item.get('port')):
                 port_items.append(str(p))
             for pr in self._as_list(item.get('port_range')):
                 port_items.append(str(pr).replace(':', '-'))
             if port_items:
-                # 去重保留顺序，然后排序，再合并重叠/相邻范围
                 unique_items = list(dict.fromkeys(port_items))
                 sorted_items = self._sort_port_items(unique_items)
                 merged_items = self._merge_port_items(sorted_items)
@@ -516,7 +494,6 @@ class RulesMerger:
                 result.append(f"DST-PORT,{joined}")
         return result
 
-    # 验证：支持 DST-PORT 中的范围和多个项目，也支持其他规则
     def _validate_classical_rule(self, rule: str) -> Optional[str]:
         try:
             parts = [p.strip() for p in rule.split(',')]
@@ -526,9 +503,9 @@ class RulesMerger:
             if prefix in ('DOMAIN', 'DOMAIN-SUFFIX'):
                 return rule if DOMAIN_PATTERN.match(value) else None
             if prefix == 'DOMAIN-KEYWORD':
-                return rule  # 关键词无格式限制
+                return rule
             if prefix == 'DOMAIN-REGEX':
-                return rule  # 正则表达式不作校验
+                return rule
             if prefix == 'IP-CIDR':
                 return rule if self._get_ipcidr_version(value) == 4 else None
             if prefix == 'IP-CIDR6':
@@ -544,7 +521,6 @@ class RulesMerger:
                     return rule if PORT_PATTERN.match(value) else None
             if prefix == 'NETWORK':
                 return rule if value.lower() in ('tcp', 'udp') else None
-            # 未知前缀默认通过（容错）
             return rule
         except Exception:
             return None
@@ -608,7 +584,7 @@ class RulesMerger:
                         self._stats['duplicates'] += 1
                 final_rules = unique_strs
 
-                # ---- 跨规则合并 DST-PORT ----
+                # 跨规则合并 DST-PORT（适用于 classical 输出）
                 if target_behavior == 'classical':
                     dst_port_rules = []
                     other_rules = []
@@ -626,7 +602,6 @@ class RulesMerger:
                             else:
                                 items = [expr.strip()]
                             all_items.extend(items)
-                        # 去重保留顺序，然后排序，再合并重叠/相邻范围
                         unique_items = list(dict.fromkeys(all_items))
                         sorted_items = self._sort_port_items(unique_items)
                         merged_items = self._merge_port_items(sorted_items)
@@ -654,6 +629,29 @@ class RulesMerger:
                 self._add_sing_box_rule_items(bucket, rule)
             else:
                 passthrough_rules.append(rule)
+
+        # ---- 对端口进行全局合并优化 ----
+        if bucket['port'] or bucket['port_range']:
+            # 收集所有端口项（port_range 中的 : 转回 -）
+            all_port_items = []
+            for p in bucket['port']:
+                all_port_items.append(str(p))
+            for pr in bucket['port_range']:
+                all_port_items.append(str(pr).replace(':', '-'))
+            # 去重、排序、合并范围
+            unique_items = list(dict.fromkeys(all_port_items))
+            sorted_items = self._sort_port_items(unique_items)
+            merged_items = self._merge_port_items(sorted_items)
+            # 分类为 port 和 port_range
+            new_port = []
+            new_port_range = []
+            for item in merged_items:
+                if '-' in item:
+                    new_port_range.append(item.replace('-', ':'))
+                else:
+                    new_port.append(item)
+            bucket['port'] = new_port
+            bucket['port_range'] = new_port_range
 
         compacted = self._compact_sing_box_rules(bucket)
         all_rules = compacted + passthrough_rules
@@ -703,7 +701,6 @@ class RulesMerger:
                 else:
                     sorted_vals = sorted(int(v) for v in unique)
             elif key == 'port_range':
-                # 按字符串排序（范围起始端口）
                 sorted_vals = sorted(str(v) for v in unique)
             else:
                 sorted_vals = sorted(unique, key=lambda x: str(x))
