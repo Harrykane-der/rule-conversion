@@ -82,7 +82,7 @@
       url: https://raw.githubusercontent.com/Harrykane-der/my-rules/refs/heads/main/ablock.json
       format: json
       behavior: singbox
-   ablock.yaml:
+    ablock.yaml:
       type: http
       url: https://raw.githubusercontent.com/Harrykane-der/my-rules/refs/heads/main/ablock.yaml
       format: yaml
