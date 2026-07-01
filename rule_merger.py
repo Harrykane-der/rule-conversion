@@ -34,7 +34,7 @@ SING_BOX_LIST_FIELDS = (
     'domain_regex', 'ip_cidr', 'port', 'port_range', 'network'
 )
 
-# Classical 类型到 Sing‑Box 字段的映射（仅 DST-PORT）
+# Classical 类型到 Sing‑Box 字段的映射（包含所有字段）
 CLASSICAL_TO_SB = {
     'DOMAIN': 'domain',
     'DOMAIN-SUFFIX': 'domain_suffix',
@@ -308,35 +308,46 @@ class RulesMerger:
             return f"DOMAIN-SUFFIX,{domain}" if DOMAIN_PATTERN.match(domain) else None
         return f"DOMAIN,{rule}" if DOMAIN_PATTERN.match(rule) else None
 
-    # 修改：专门处理 DST-PORT，分离端口和范围
+    # 改进：支持所有 Classical 规则（不仅仅是 DST-PORT）
     def _classical_to_sing_box(self, rule: str) -> Optional[str]:
         if not self._validate_classical_rule(rule):
             return None
         parts = [p.strip() for p in rule.split(',')]
-        if len(parts) < 2 or parts[0] != 'DST-PORT':
+        if len(parts) < 2:
             return None
-        port_expr = parts[1]
-        if '/' in port_expr:
-            items = [x.strip() for x in port_expr.split('/') if x.strip()]
-        else:
-            items = [port_expr]
+        prefix = parts[0]
 
-        port_list = []
-        port_range_list = []
-        for item in items:
-            if '-' in item:
-                # 范围，转为 x:y
-                port_range_list.append(item.replace('-', ':'))
+        if prefix == 'DST-PORT':
+            # 端口特殊处理（分离单端口和范围）
+            port_expr = parts[1]
+            if '/' in port_expr:
+                items = [x.strip() for x in port_expr.split('/') if x.strip()]
             else:
-                # 单个端口
-                port_list.append(item)
+                items = [port_expr]
+            port_list = []
+            port_range_list = []
+            for item in items:
+                if '-' in item:
+                    port_range_list.append(item.replace('-', ':'))
+                else:
+                    port_list.append(item)
+            result = {}
+            if port_list:
+                result['port'] = port_list
+            if port_range_list:
+                result['port_range'] = port_range_list
+            return json.dumps(result) if result else None
 
-        result = {}
-        if port_list:
-            result['port'] = port_list
-        if port_range_list:
-            result['port_range'] = port_range_list
-        return json.dumps(result) if result else None
+        else:
+            # 通用转换：DOMAIN, DOMAIN-SUFFIX, DOMAIN-KEYWORD, DOMAIN-REGEX, NETWORK 等
+            item = self._to_sing_box_item(rule, 'classical')
+            if not item:
+                return None
+            field, value = item
+            # Sing‑Box 要求字段值为数组
+            if not isinstance(value, list):
+                value = [value]
+            return json.dumps({field: value})
 
     def _domain_to_sing_box(self, rule: str) -> Optional[str]:
         if not self._validate_domain_rule(rule):
@@ -444,7 +455,7 @@ class RulesMerger:
                 result.append(f"DST-PORT,{joined}")
         return result
 
-    # 验证：支持 DST-PORT 中的范围和多个项目
+    # 验证：支持 DST-PORT 中的范围和多个项目，也支持其他规则
     def _validate_classical_rule(self, rule: str) -> Optional[str]:
         try:
             parts = [p.strip() for p in rule.split(',')]
@@ -453,6 +464,10 @@ class RulesMerger:
             prefix, value = parts[0], parts[1]
             if prefix in ('DOMAIN', 'DOMAIN-SUFFIX'):
                 return rule if DOMAIN_PATTERN.match(value) else None
+            if prefix == 'DOMAIN-KEYWORD':
+                return rule  # 关键词无格式限制
+            if prefix == 'DOMAIN-REGEX':
+                return rule  # 正则表达式不作校验
             if prefix == 'IP-CIDR':
                 return rule if self._get_ipcidr_version(value) == 4 else None
             if prefix == 'IP-CIDR6':
@@ -468,6 +483,7 @@ class RulesMerger:
                     return rule if PORT_PATTERN.match(value) else None
             if prefix == 'NETWORK':
                 return rule if value.lower() in ('tcp', 'udp') else None
+            # 未知前缀默认通过（容错）
             return rule
         except Exception:
             return None
