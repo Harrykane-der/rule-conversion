@@ -180,35 +180,56 @@ class RulesMerger:
         """
         超高速域名智能去重：如果存在更具体的子域名，则移除更宽泛的父域名。
         利用反转排序特性，将时间复杂度从 O(N^2) 降到 O(N log N)，万级数据只需几毫秒。
-        例如：['baidu.com', 'ad.baidu.com'] -> ['ad.baidu.com']
         """
         if not domains:
             return []
-        
-        # 1. 去重并转换为分段反转的元组。例如: "ad.baidu.com" -> ("com", "baidu", "ad")
         unique_domains = set(domains)
         reversed_tuples = sorted([tuple(d.split('.'))[::-1] for d in unique_domains])
-        
         result_tuples = []
         n = len(reversed_tuples)
-        
-        # 2. 核心逻辑：排序后，如果当前域名是下一个域名的“父域名”，
-        # 那么它在元组中必然是下一个元组的前缀。
         for i in range(n):
             current = reversed_tuples[i]
-            
             if i < n - 1:
                 next_domain = reversed_tuples[i + 1]
-                # 检查 current 是否是 next_domain 的前缀（即 parent 关系）
                 if len(current) <= len(next_domain) and next_domain[:len(current)] == current:
-                    # 按照原本逻辑：有更具体子域名，则跳过（丢弃）父域名
                     continue
-            
             result_tuples.append(current)
-            
-        # 3. 将元组还原回域名字符串，并按字母顺序排序返回
         final_domains = ['.'.join(t[::-1]) for t in result_tuples]
         return sorted(final_domains)
+
+    def _merge_ip_rules(self, rules: List[str]) -> List[str]:
+        """
+        智能网段聚合：自动合并重叠、包含或相邻的 IP 路由网段 (支持 IPv4/IPv6)。
+        """
+        if not rules:
+            return []
+        v4_nets = []
+        v6_nets = []
+        for rule in rules:
+            parts = rule.split(',')
+            if len(parts) < 2:
+                continue
+            net_str = parts[1].strip()
+            try:
+                net_obj = ipaddress.ip_network(net_str, strict=False)
+                if net_obj.version == 4:
+                    v4_nets.append(net_obj)
+                elif net_obj.version == 6:
+                    v6_nets.append(net_obj)
+            except ValueError:
+                continue
+
+        collapsed_v4 = list(ipaddress.collapse_addresses(v4_nets))
+        collapsed_v6 = list(ipaddress.collapse_addresses(v6_nets))
+        
+        self._stats['duplicates'] += (len(rules) - (len(collapsed_v4) + len(collapsed_v6)))
+        
+        result = []
+        for net in collapsed_v4:
+            result.append(f"IP-CIDR,{net}")
+        for net in collapsed_v6:
+            result.append(f"IP-CIDR6,{net}")
+        return result
 
     # -------------------- 规则获取与解析 --------------------
     def _fetch_rules_from_source(self, source: Dict, target_behavior: str) -> List[Any]:
@@ -602,7 +623,7 @@ class RulesMerger:
                 str_rules = [str(r) for r in all_rules if r is not None]
                 final_rules = self._deduplicate_and_merge_classical(str_rules)
 
-            logger.info(f"去重后规则数: {len(final_rules)}, 重复项: {self._stats['duplicates']}")
+            logger.info(f"去重和聚合后规则数: {len(final_rules)}, 减少重复/重叠项: {self._stats['duplicates']}")
 
             output_file = config['path']
             self._write_rules(
@@ -615,7 +636,6 @@ class RulesMerger:
 
     def _deduplicate_and_merge_classical(self, rules: List[str]) -> List[str]:
         """对 Classical 规则进行智能去重和合并"""
-        # 按前缀分类
         domain_rules = []
         domain_suffix_rules = []
         domain_keyword_rules = []
@@ -650,6 +670,9 @@ class RulesMerger:
         deduped_domain = self._deduplicate_domain_rules(domain_rules)
         deduped_domain_suffix = self._deduplicate_domain_rules(domain_suffix_rules)
 
+        # IP 智能聚合合并 👈 新功能
+        merged_ip_cidr = self._merge_ip_rules(ip_cidr_rules)
+
         # 端口合并去重
         merged_dst_port = self._merge_dst_port_rules(dst_port_rules)
 
@@ -671,7 +694,7 @@ class RulesMerger:
         result.extend(deduped_domain_suffix)
         result.extend(dedup_list(domain_keyword_rules))
         result.extend(dedup_list(domain_regex_rules))
-        result.extend(dedup_list(ip_cidr_rules))
+        result.extend(merged_ip_cidr)  # 👈 使用聚合后的网段
         if merged_dst_port:
             result.append(merged_dst_port)
         result.extend(dedup_list(network_rules))
@@ -683,7 +706,6 @@ class RulesMerger:
         """对域名规则进行智能去重"""
         if not rules:
             return []
-        # 提取域名
         domain_map = {}
         for rule in rules:
             parts = rule.split(',', 1)
@@ -692,7 +714,6 @@ class RulesMerger:
                 domain_map[domain] = rule
         if not domain_map:
             return rules
-        # 智能去重
         deduped_domains = self._deduplicate_domains(list(domain_map.keys()))
         return [domain_map[d] for d in deduped_domains]
 
@@ -718,7 +739,7 @@ class RulesMerger:
         return "DST-PORT," + "/".join(merged_items)
 
     def _compile_final_sing_box_list(self, rules: List[Dict]) -> List[Dict]:
-        """编译最终 Sing-Box 规则列表（含端口优化和域名去重）"""
+        """编译最终 Sing-Box 规则列表（含端口优化、域名去重和 IP 网段智能聚合）"""
         bucket = {key: [] for key in SING_BOX_LIST_FIELDS}
         passthrough_rules = []
 
@@ -733,6 +754,18 @@ class RulesMerger:
             bucket['domain'] = self._deduplicate_domains([str(d) for d in bucket['domain']])
         if bucket['domain_suffix']:
             bucket['domain_suffix'] = self._deduplicate_domains([str(s) for s in bucket['domain_suffix']])
+
+        # IP 智能聚合优化 👈 新功能同样注入到 Sing-Box 输出中
+        if bucket['ip_cidr']:
+            nets = []
+            for ip in bucket['ip_cidr']:
+                try:
+                    nets.append(ipaddress.ip_network(str(ip), strict=False))
+                except ValueError:
+                    continue
+            collapsed_nets = list(ipaddress.collapse_addresses(nets))
+            self._stats['duplicates'] += (len(bucket['ip_cidr']) - len(collapsed_nets))
+            bucket['ip_cidr'] = [str(net) for net in collapsed_nets]
 
         # 端口合并优化
         if bucket['port'] or bucket['port_range']:
