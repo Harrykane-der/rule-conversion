@@ -1,0 +1,12 @@
+# 更新时间: 2026-07-02 13:45:22
+# 规则数量: 9
+payload:
+- +.cloudfront.net
+- +.bc.googleusercontent.com
+- +.people.aws.dev
+- +.pesdb.net
+- +.applilink.jp
+- +.konaminet.jp
+- +.konami.net
+- +.efootballhub.net
+- +.konami.*
