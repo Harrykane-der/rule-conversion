@@ -209,7 +209,7 @@
       url: https://github.com/SagerNet/sing-geosite/raw/refs/heads/rule-set/geosite-cn.srs
       format: srs
       behavior: singbox
-    local_ai:
+    local_direct:
       type: file
       path: local/direct.yaml
       format: yaml
