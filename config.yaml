@@ -98,9 +98,10 @@
   behavior: classical
   upstream: *ablock_upstream
 
-- path: output/proxy_emby.mrs
+- path: output/ablock.mrs
   format: mrs
   behavior: domain
+  upstream: *ablock_upstream
 
 # ablock
 - path: output/adblock.mrs
