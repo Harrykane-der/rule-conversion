@@ -1,2 +1,5 @@
 payload:
   - DOMAIN,www.cycani.org
+  - DOMAIN-SUFFIX,fastly.jsdelivr.net
+  - DOMAIN-SUFFIX,gh-proxy.com  
+  
