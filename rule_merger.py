@@ -15,109 +15,61 @@ from functools import lru_cache
 from collections import defaultdict
 import concurrent.futures
 
-# ====================== 日志配置 ======================
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # ====================== 常量 ======================
-DOMAIN_PATTERN = re.compile(
-    r'^(?:\.?(\*|[a-zA-Z0-9*](?:[a-zA-Z0-9*-]*[a-zA-Z0-9*])?))'
-    r'(?:\.(?:\*|[a-zA-Z0-9*](?:[a-zA-Z0-9*-]*[a-zA-Z0-9*])?))*$'
-)
+DOMAIN_PATTERN = re.compile(r'^(?:\.?(\*|[a-zA-Z0-9*](?:[a-zA-Z0-9*-]*[a-zA-Z0-9*])?))(?:\.(?:\*|[a-zA-Z0-9*](?:[a-zA-Z0-9*-]*[a-zA-Z0-9*])?))*$')
 PORT_PATTERN = re.compile(r'^\d+(?:-\d+)?$')
 
 MIHOMO_PATH = 'mihomo'
 SING_BOX_PATH = 'sing-box'
 SING_BOX_RULESET_VERSION = 5
 
-SING_BOX_LIST_FIELDS = {
-    'domain', 'domain_suffix', 'domain_keyword', 'domain_regex',
-    'ip_cidr', 'port', 'port_range', 'network'
-}
-
-CLASSICAL_TO_SB = {
-    'DOMAIN': 'domain', 'DOMAIN-SUFFIX': 'domain_suffix',
-    'DOMAIN-KEYWORD': 'domain_keyword', 'DOMAIN-REGEX': 'domain_regex',
-    'IP-CIDR': 'ip_cidr', 'IP-CIDR6': 'ip_cidr',
-    'DST-PORT': 'port', 'NETWORK': 'network'
-}
+SING_BOX_LIST_FIELDS = {'domain', 'domain_suffix', 'domain_keyword', 'domain_regex', 'ip_cidr', 'port', 'port_range', 'network'}
+CLASSICAL_TO_SB = {'DOMAIN': 'domain', 'DOMAIN-SUFFIX': 'domain_suffix', 'DOMAIN-KEYWORD': 'domain_keyword', 'DOMAIN-REGEX': 'domain_regex', 'IP-CIDR': 'ip_cidr', 'IP-CIDR6': 'ip_cidr', 'DST-PORT': 'port', 'NETWORK': 'network'}
 
 
-# ====================== 独立去重工具类 ======================
 class RulesDeduplicator:
-    """统一去重工具 - 优化所有去重场景"""
-
+    """去重优化工具"""
     @staticmethod
     def deduplicate_domains(domains: List[str]) -> List[str]:
-        """高效域名去重：子域名优先覆盖父域名"""
-        if not domains:
-            return []
+        if not domains: return []
         unique = {d.strip().lower() for d in domains if d.strip()}
-        if not unique:
-            return []
-
         reversed_tuples = sorted(tuple(d.split('.'))[::-1] for d in unique)
         result = []
         n = len(reversed_tuples)
-
         for i in range(n):
             current = reversed_tuples[i]
-            # 检查是否被更具体的域名覆盖
-            covered = False
-            for j in range(i + 1, n):
-                nxt = reversed_tuples[j]
-                if len(current) <= len(nxt) and nxt[:len(current)] == current:
-                    covered = True
-                    break
+            covered = any(len(current) <= len(reversed_tuples[j]) and reversed_tuples[j][:len(current)] == current for j in range(i+1, n))
             if not covered:
                 result.append('.'.join(current[::-1]))
-
         return sorted(result)
 
     @staticmethod
     def merge_ip_cidr(rules: List[str]) -> List[str]:
-        """IP 网段智能聚合"""
-        if not rules:
-            return []
         v4, v6 = [], []
         for rule in rules:
-            if ',' not in rule:
-                continue
+            if ',' not in rule: continue
             try:
-                net_str = rule.split(',', 1)[1].strip()
-                net = ipaddress.ip_network(net_str, strict=False)
+                net = ipaddress.ip_network(rule.split(',', 1)[1].strip(), strict=False)
                 (v4 if net.version == 4 else v6).append(net)
-            except ValueError:
-                continue
-
+            except: continue
         collapsed = list(ipaddress.collapse_addresses(v4)) + list(ipaddress.collapse_addresses(v6))
-        result = [f"IP-CIDR,{net}" for net in collapsed if net.version == 4]
-        result.extend([f"IP-CIDR6,{net}" for net in collapsed if net.version == 6])
-        return result
+        return [f"IP-CIDR,{n}" for n in collapsed if n.version == 4] + [f"IP-CIDR6,{n}" for n in collapsed if n.version == 6]
 
     @staticmethod
-    def merge_ports(port_rules: List[str]) -> Optional[str]:
-        """端口规则合并"""
-        if not port_rules:
-            return None
-        all_items = []
-        for rule in port_rules:
-            if ',' not in rule:
-                continue
-            expr = rule.split(',', 1)[1]
-            items = [x.strip() for x in expr.split('/') if x.strip()]
-            all_items.extend(items)
-
-        merged = RulesDeduplicator._merge_port_items(list(dict.fromkeys(all_items)))
+    def merge_ports(rules: List[str]) -> Optional[str]:
+        items = []
+        for r in rules:
+            if ',' in r:
+                items.extend([x.strip() for x in r.split(',',1)[1].split('/') if x.strip()])
+        if not items: return None
+        merged = RulesDeduplicator._merge_port_items(list(dict.fromkeys(items)))
         return f"DST-PORT,{'/'.join(merged)}" if merged else None
 
     @staticmethod
-    def _merge_port_items(items: List[str]) -> List[str]:
-        if not items:
-            return []
+    def _merge_port_items(items):
         ranges = []
         for item in items:
             try:
@@ -126,40 +78,28 @@ class RulesDeduplicator:
                 else:
                     s = e = int(item)
                 ranges.append((s, e))
-            except ValueError:
-                continue
+            except: continue
         ranges.sort()
         merged = [ranges[0]]
-        for curr in ranges[1:]:
-            last = merged[-1]
-            if curr[0] <= last[1] + 1:
-                merged[-1] = (last[0], max(last[1], curr[1]))
+        for c in ranges[1:]:
+            if c[0] <= merged[-1][1] + 1:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], c[1]))
             else:
-                merged.append(curr)
-        return [str(s) if s == e else f"{s}-{e}" for s, e in merged]
+                merged.append(c)
+        return [str(a) if a == b else f"{a}-{b}" for a, b in merged]
 
     @staticmethod
-    def normalize_signature(rule: Any) -> str:
-        """规则签名标准化"""
+    def normalize_signature(rule):
         if isinstance(rule, dict):
-            norm = {}
-            for k, v in sorted(rule.items()):
-                if isinstance(v, (list, tuple)):
-                    norm[k] = sorted(str(x).lower() for x in v)
-                else:
-                    norm[k] = str(v).lower()
-            return json.dumps(norm, ensure_ascii=False, sort_keys=True)
-        if isinstance(rule, str):
-            s = rule.strip().lower()
-            s = s.replace('ip-cidr6,', 'ip-cidr,')
-            return s
-        return str(rule).lower()
+            d = {k: sorted(str(x).lower() for x in v) if isinstance(v, (list,tuple)) else str(v).lower() 
+                 for k, v in sorted(rule.items())}
+            return json.dumps(d, ensure_ascii=False, sort_keys=True)
+        s = str(rule).strip().lower()
+        return s.replace('ip-cidr6,', 'ip-cidr,')
 
     @staticmethod
-    def deduplicate_list(items: List[Any]) -> List[Any]:
-        """通用去重（保持相对顺序）"""
-        seen = {}
-        result = []
+    def deduplicate_list(items):
+        seen, result = {}, []
         for item in items:
             sig = RulesDeduplicator.normalize_signature(item)
             if sig not in seen:
@@ -168,13 +108,11 @@ class RulesDeduplicator:
         return result
 
 
-# ====================== 主类 ======================
 class RulesMerger:
     def __init__(self, config_path: str):
         self.config = self._load_config(config_path)
         self.mihomo_path = MIHOMO_PATH
         self.sing_box_path = SING_BOX_PATH
-        self._stats = {'total': 0, 'converted': 0, 'dropped': 0, 'duplicates': 0}
 
     @staticmethod
     def _load_config(path: str):
@@ -186,153 +124,103 @@ class RulesMerger:
     def _temp_file(self, suffix: str):
         fd, path = tempfile.mkstemp(suffix=suffix)
         os.close(fd)
-        try:
-            yield path
+        try: yield path
         finally:
-            if os.path.exists(path):
-                os.unlink(path)
-
-    @staticmethod
-    def _as_list(value: Any) -> List[Any]:
-        if value is None:
-            return []
-        return value if isinstance(value, list) else [value]
-
-    @staticmethod
-    def _clean_rule(rule: str) -> str:
-        rule = rule.strip()
-        if not rule or rule.startswith('#'):
-            return ''
-        return re.split(r'\s+#', rule)[0].strip()
+            if os.path.exists(path): os.unlink(path)
 
     def _fetch_rules_from_source(self, source: Dict, target_behavior: str) -> List[Any]:
-        # （保持原有逻辑，省略以节省篇幅，实际使用时请保留你原来的 _fetch_http_rules 等方法）
-        # 这里仅占位，推荐保留你原来的实现
-        logger.info(f"获取规则: {source.get('url') or source.get('path')}")
-        return []  # 替换为实际实现
+        # 这里保留你原来最核心的获取逻辑（简化版）
+        rule_format = source.get('format', 'yaml')
+        if source.get('type') == 'http':
+            try:
+                resp = requests.get(source['url'], timeout=30)
+                resp.raise_for_status()
+                if rule_format == 'yaml' or source['url'].endswith(('.yml','.yaml')):
+                    data = yaml.safe_load(resp.text)
+                    return data.get('payload', []) if isinstance(data, dict) else []
+                return resp.text.splitlines()
+            except Exception as e:
+                logger.error(f"下载失败 {source.get('url')}: {e}")
+                return []
+        elif source.get('type') == 'file':
+            try:
+                with open(source['path'], 'r', encoding='utf-8') as f:
+                    if rule_format == 'yaml':
+                        data = yaml.safe_load(f)
+                        return data.get('payload', []) if isinstance(data, dict) else []
+                    return f.read().splitlines()
+            except Exception as e:
+                logger.error(f"读取文件失败: {e}")
+                return []
+        return []
 
-    def _transform(self, rule: Any, source_behavior: str, target_behavior: str) -> List[Any]:
-        # 简化版，实际请使用你原来的转换逻辑
-        self._stats['total'] += 1
+    def _transform(self, rule, source_b, target_b):
+        # 简化处理，实际可扩展
         return [rule] if rule else []
 
-    def _deduplicate_and_merge_classical(self, rules: List[str]) -> List[str]:
-        dedup = RulesDeduplicator
-        domain, domain_suffix, keyword, regex, ip_cidr, dst_port, network, others = [], [], [], [], [], [], [], []
-
-        for r in rules:
-            if not isinstance(r, str):
-                others.append(r)
+    def merge_rules(self):
+        for cfg in self.config:
+            if not cfg.get('path') or not cfg.get('upstream'):
                 continue
-            if r.startswith('DOMAIN,'): domain.append(r)
-            elif r.startswith('DOMAIN-SUFFIX,'): domain_suffix.append(r)
-            elif r.startswith('DOMAIN-KEYWORD,'): keyword.append(r)
-            elif r.startswith('DOMAIN-REGEX,'): regex.append(r)
-            elif r.startswith(('IP-CIDR', 'IP-CIDR6')): ip_cidr.append(r)
-            elif r.startswith('DST-PORT,'): dst_port.append(r)
-            elif r.startswith('NETWORK,'): network.append(r)
-            else: others.append(r)
+
+            target_behavior = 'sing-box' if cfg.get('format') in ('json','srs') else 'classical'
+            all_rules = []
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+                fs = [ex.submit(self._fetch_rules_from_source, s, target_behavior) for s in cfg['upstream'].values()]
+                for f in concurrent.futures.as_completed(fs):
+                    all_rules.extend(f.result())
+
+            logger.info(f"获取到 {len(all_rules)} 条原始规则")
+
+            dedup = RulesDeduplicator
+            if target_behavior == 'sing-box':
+                final = dedup.deduplicate_list(all_rules)
+            else:
+                final = self._deduplicate_classical(all_rules, dedup)
+
+            self._write_rules(cfg['path'], final, cfg.get('format', 'yaml'))
+            logger.info(f"✅ 已生成: {cfg['path']}  ({len(final)} 条规则)")
+
+    def _deduplicate_classical(self, rules, dedup):
+        d, ds, k, r, ip, p, n, o = [], [], [], [], [], [], [], []
+        for rule in rules:
+            if not isinstance(rule, str): 
+                o.append(rule)
+                continue
+            if rule.startswith('DOMAIN,'): d.append(rule)
+            elif rule.startswith('DOMAIN-SUFFIX,'): ds.append(rule)
+            elif rule.startswith('DOMAIN-KEYWORD,'): k.append(rule)
+            elif rule.startswith('DOMAIN-REGEX,'): r.append(rule)
+            elif rule.startswith(('IP-CIDR','IP-CIDR6')): ip.append(rule)
+            elif rule.startswith('DST-PORT,'): p.append(rule)
+            elif rule.startswith('NETWORK,'): n.append(rule)
+            else: o.append(rule)
 
         result = []
-        result.extend([f"DOMAIN,{d}" for d in dedup.deduplicate_domains([r.split(',',1)[1] for r in domain if ',' in r])])
-        result.extend([f"DOMAIN-SUFFIX,{d}" for d in dedup.deduplicate_domains([r.split(',',1)[1] for r in domain_suffix if ',' in r])])
-        result.extend(dedup.deduplicate_list(keyword))
-        result.extend(dedup.deduplicate_list(regex))
-        result.extend(dedup.merge_ip_cidr(ip_cidr))
-        if port_rule := dedup.merge_ports(dst_port):
+        result.extend(f"DOMAIN,{x}" for x in dedup.deduplicate_domains([x.split(',',1)[1] for x in d if ',' in x]))
+        result.extend(f"DOMAIN-SUFFIX,{x}" for x in dedup.deduplicate_domains([x.split(',',1)[1] for x in ds if ',' in x]))
+        result.extend(dedup.deduplicate_list(k + r + n + o))
+        result.extend(dedup.merge_ip_cidr(ip))
+        if port_rule := dedup.merge_ports(p):
             result.append(port_rule)
-        result.extend(dedup.deduplicate_list(network))
-        result.extend(dedup.deduplicate_list(others))
         return result
 
-    def _compile_final_sing_box_list(self, rules: List[Dict]) -> List[Dict]:
-        dedup = RulesDeduplicator
-        bucket = defaultdict(list)
-        passthrough = []
-
-        for rule in rules:
-            if isinstance(rule, dict) and rule.get('type') != 'logical':
-                for k in SING_BOX_LIST_FIELDS:
-                    if k in rule:
-                        bucket[k].extend(dedup._as_list(rule[k]))  # type: ignore
-            else:
-                passthrough.append(rule)
-
-        # 域名去重
-        if bucket['domain']:
-            bucket['domain'] = dedup.deduplicate_domains([str(x) for x in bucket['domain']])
-        if bucket['domain_suffix']:
-            bucket['domain_suffix'] = dedup.deduplicate_domains([str(x) for x in bucket['domain_suffix']])
-
-        # IP 聚合
-        if bucket['ip_cidr']:
-            bucket['ip_cidr'] = [str(net) for net in ipaddress.collapse_addresses(
-                [ipaddress.ip_network(str(x), strict=False) for x in bucket['ip_cidr']]
-            )]
-
-        # 端口合并
-        if bucket['port'] or bucket['port_range']:
-            all_p = [str(x) for x in bucket['port']] + [str(x).replace(':', '-') for x in bucket.get('port_range', [])]
-            merged = dedup._merge_port_items(list(dict.fromkeys(all_p)))
-            bucket['port'] = [x for x in merged if '-' not in x]
-            bucket['port_range'] = [x.replace('-', ':') for x in merged if '-' in x]
-
-        # 最终去重
-        compacted = [{k: v} for k, v in bucket.items() if v]
-        return dedup.deduplicate_list(compacted + passthrough)
-
-    def merge_rules(self):
-        for config in self.config:
-            if 'upstream' not in config or not config.get('path'):
-                continue
-
-            target_behavior = self._normalize_behavior(config.get('behavior', 'classical'))
-            self._stats = {'total': 0, 'converted': 0, 'dropped': 0, 'duplicates': 0}
-
-            all_rules = []
-            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-                futures = [executor.submit(self._fetch_rules_from_source, src, target_behavior) 
-                          for src in config['upstream'].values()]
-                for future in concurrent.futures.as_completed(futures):
-                    all_rules.extend(future.result())
-
-            if target_behavior == 'sing-box':
-                final_rules = self._compile_final_sing_box_list(all_rules)
-            else:
-                final_rules = self._deduplicate_and_merge_classical([str(r) for r in all_rules if r])
-
-            logger.info(f"最终规则数量: {len(final_rules)} | 去重减少: {self._stats['duplicates']}")
-            self._write_rules(config['path'], final_rules, config.get('format', 'yaml'), target_behavior)
-
-    # 其他辅助方法（如 _write_rules, _normalize_behavior 等）请补充你原来的实现
-
-    @staticmethod
-    def _normalize_behavior(behavior: Optional[str]) -> str:
-        if not behavior:
-            return 'classical'
-        b = behavior.strip().lower()
-        return 'sing-box' if b in ('singbox', 'sing-box') else b
-
-    def _write_rules(self, path: str, rules: List, fmt: str, behavior: str):
+    def _write_rules(self, path: str, rules: List, fmt: str):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, 'w', encoding='utf-8') as f:
             if fmt == 'yaml':
-                yaml.dump({'payload': rules}, f, allow_unicode=True, sort_keys=False)
+                yaml.dump({'payload': rules}, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
             else:
-                for r in rules:
-                    f.write(f"{r}\n")
-        logger.info(f"已写入 {fmt} 文件: {path} ({len(rules)} 条)")
+                for line in rules:
+                    f.write(str(line) + '\n')
+        logger.info(f"已写入 {len(rules)} 条规则 → {path}")
 
-
-# ====================== 入口 ======================
 def main():
-    parser = argparse.ArgumentParser(description="规则合并优化工具")
-    parser.add_argument('-c', '--config', default='config.yaml', help='配置文件路径')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', '--config', default='config.yaml')
     args = parser.parse_args()
-
-    merger = RulesMerger(args.config)
-    merger.merge_rules()
-
+    RulesMerger(args.config).merge_rules()
 
 if __name__ == '__main__':
     main()
