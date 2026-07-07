@@ -388,11 +388,12 @@
       url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/gfw.mrs
       format: mrs
       behavior: domain
-    gfw:
+    cresky_gfw:
       type: http
-      url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/meta/geo/geosite/gfw.mrs
+      url: https://github.com/cresky-github/geosite/raw/refs/heads/main/proxy.mrs
       format: mrs
       behavior: domain
+      
 
 - path: output/gfw.yaml
   format: yaml
