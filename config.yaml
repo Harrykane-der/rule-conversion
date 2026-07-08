@@ -188,6 +188,66 @@
   behavior: sing-box
   upstream: *adblock_ip_upstream
 
+- path: output/bytedance.mrs
+  format: mrs
+  behavior: domain
+  upstream: &bytedance_upstream
+    MetaCubeX_bytedance:
+      type: http
+      url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/bytedance.mrs
+      format: mrs
+      behavior: domain
+    SagerNet_bytedance:
+      type: http
+      url: https://github.com/SagerNet/sing-geosite/raw/refs/heads/rule-set/geosite-bytedance.srs
+      format: srs
+      behavior: singbox
+    MetaCubeX_douyin:
+      type: http
+      url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/douyin.mrs
+      format: mrs
+      behavior: domain
+    MetaCubeX_tiktok:
+      type: http
+      url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/tiktok.mrs
+      format: mrs
+      behavior: domain
+    QuixoticHeart_donyin:
+      type: http
+      url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/douyin.mrs
+      format: mrs
+      behavior: domain
+    QuixoticHeart_tiktok:
+      type: http
+      url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/tiktok.mrs
+      format: mrs
+      behavior: domain
+    SagerNet_douyin:
+      type: http
+      url: https://github.com/SagerNet/sing-geosite/raw/refs/heads/rule-set/geosite-douyin.srs
+      format: srs
+      behavior: singbox
+    SagerNet_tiktok:
+      type: http
+      url: https://github.com/SagerNet/sing-geosite/raw/refs/heads/rule-set/geosite-tiktok.srs
+      format: srs
+      behavior: singbox
+
+- path: output/bytedance.yaml
+  format: yaml
+  behavior: domain
+  upstream: *bytedance_upstream
+
+- path: output/bytedance.json
+  format: json
+  behavior: sing-box
+  upstream: *bytedance_upstream
+
+- path: output/bytedance.srs
+  format: srs
+  behavior: sing-box
+  upstream: *bytedance_upstream
+
 
 # direct
 - path: output/cn.mrs
