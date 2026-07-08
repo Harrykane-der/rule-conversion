@@ -108,16 +108,6 @@
   format: mrs
   behavior: domain
   upstream: &adblock_upstream
-    adrules:
-      type: http
-      url: https://github.com/echs-top/proxy/raw/refs/heads/main/mrs/domain/ads.mrs
-      format: mrs
-      behavior: domain
-    QuixoticHeart_adrules:
-      type: http
-      url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/adrules.mrs
-      format: mrs
-      behavior: domain
     adblock:
       type: http
       url: https://github.com/Harrykane-der/AdRules/raw/refs/heads/main/adrules-mihomo.mrs
