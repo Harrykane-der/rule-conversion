@@ -47,7 +47,7 @@
   format: srs
   behavior: sing-box
   upstream: *direct_emby_upstream
-  
+ 
 - path: output/proxy_emby.mrs
   format: mrs
   behavior: domain
@@ -72,7 +72,7 @@
   format: srs
   behavior: sing-box
   upstream: *proxy_emby_upstream
-
+ 
 - path: output/ablock.srs
   format: srs
   behavior: singbox
@@ -247,6 +247,46 @@
   format: srs
   behavior: sing-box
   upstream: *bytedance_upstream
+
+- path: output/bilibili.mrs
+  format: mrs
+  behavior: domain
+  upstream: &bilibili_upstream
+    DustinWin_bilibili:
+      type: http
+      url: https://github.com/DustinWin/ruleset_geodata/releases/download/mihomo-ruleset/bilibili.mrs
+      format: mrs
+      behavior: domain
+    MetaCubeX_bilibili:
+      type: http
+      url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/bilibili.mrs
+      format: mrs
+      behavior: domain
+    QuixoticHeart_bilibili:
+      type: http
+      url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/bilibili.mrs
+      format: mrs
+      behavior: domain
+    SagerNet_bilibili:
+      type: http
+      url: https://github.com/SagerNet/sing-geosite/raw/refs/heads/rule-set/geosite-bilibili.srs
+      format: srs
+      behavior: singbox
+
+- path: output/bilibili.yaml
+  format: yaml
+  behavior: domain
+  upstream: *bilibili_upstream
+
+- path: output/bilibili.json
+  format: json
+  behavior: sing-box
+  upstream: *bilibili_upstream
+
+- path: output/bilibili.srs
+  format: srs
+  behavior: sing-box
+  upstream: *bilibili_upstream
 
 
 # direct
