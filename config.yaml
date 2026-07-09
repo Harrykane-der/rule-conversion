@@ -419,6 +419,16 @@
   format: mrs
   behavior: domain
   upstream: &gfw_upstream
+    telegram:
+      type: http
+      url: https://ruleset.skk.moe/Clash/non_ip/telegram.txt
+      format: text
+      behavior: classical
+    xndeye_proxy:
+      type: file
+      path: local/proxy.yaml
+      format: yaml
+      behavior: classical
     gfw:
       type: http
       url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/meta/geo/geosite/gfw.mrs
@@ -462,6 +472,12 @@
     QuixoticHeart_tld_proxy:
       type: http
       url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/tld-proxy.mrs
+      format: mrs
+      behavior: domain
+    QuixoticHeart_iplocation_proxy:
+      type: http
+      url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/iplocation-proxy.mrs
+      format: mrs
       behavior: domain
     QuixoticHeart_proxy:
       type: http
@@ -473,16 +489,6 @@
       url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/gfw.mrs
       format: mrs
       behavior: domain
-    MetaCubeX_media:
-      type: http
-      url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/category-media.mrs
-      format: mrs
-      behavior: domain
-    SagerNet_category_media:
-      type: http
-      url: https://github.com/SagerNet/sing-geosite/raw/refs/heads/rule-set/geosite-category-media.srs
-      format: srs
-      behavior: singbox
     cresky_gfw:
       type: http
       url: https://github.com/cresky-github/geosite/raw/refs/heads/main/proxy.mrs
