@@ -5,7 +5,7 @@ import tempfile
 import requests
 import os
 import logging
-import time  # 新增：用于重试间隔等待
+import time
 from typing import List, Dict, Optional, Any, Union, Tuple
 from contextlib import contextmanager
 import re
@@ -137,7 +137,6 @@ class RulesMerger:
             return []
             
         ranges = []
-        # 一次性解析所有端口和范围
         for item in set(items):
             item_str = str(item).strip()
             if not item_str: 
@@ -155,38 +154,47 @@ class RulesMerger:
         if not ranges:
             return []
             
-        # 按起始端口排序
         ranges.sort(key=lambda x: x[0])
         
         merged = [list(ranges[0])]
         for start, end in ranges[1:]:
             last_start, last_end = merged[-1]
             if start <= last_end + 1:
-                # 存在重叠或相连，更新结束端口
                 merged[-1][1] = max(last_end, end)
             else:
-                # 无交集，新增区间
                 merged.append([start, end])
                 
         return [str(s) if s == e else f"{s}-{e}" for s, e in merged]
 
-    @staticmethod
-    def _deduplicate_domains(domains: List[str]) -> List[str]:
+    def _unified_domain_deduplication(self, exact_domains: List[str], suffix_domains: List[str]) -> Tuple[List[str], List[str]]:
         """
-        超高速域名智能去重：保留更宽泛的父域名，移除冗余的子域名。
+        超高速跨类型域名智能去重：
+        将精确域名 (exact) 和后缀域名 (suffix) 统一合并。
+        如果出现父域名（如 baidu.com）和子域名（如 sdk.baidu.com），则无条件剔除子域名，仅保留父域名。
+        若同一域名既是精确又是后缀，则升级保留为后缀。
         """
-        if not domains:
-            return []
-            
-        # 第一层：基础 set 去重并过滤空值，大幅减少后续排序和分割负担
-        unique_domains = {d for d in domains if d}
-        if not unique_domains:
-            return []
+        domain_types = {}
+        
+        # 0 表示 exact，1 表示 suffix
+        for d in exact_domains:
+            if d:
+                d_str = str(d).strip()
+                if d_str:
+                    domain_types[d_str] = 0
+                    
+        for d in suffix_domains:
+            if d:
+                d_str = str(d).strip()
+                if d_str:
+                    domain_types[d_str] = 1
+                    
+        if not domain_types:
+            return [], []
 
         # 将域名拆分并反转，例：sub.example.com -> ('com', 'example', 'sub')
-        reversed_tuples = sorted(tuple(d.split('.'))[::-1] for d in unique_domains)
+        reversed_tuples = sorted(tuple(d.split('.'))[::-1] for d in domain_types.keys())
         
-        result_tuples = []
+        result_domains = []
         last_parent = None
         last_len = 0
         
@@ -196,17 +204,23 @@ class RulesMerger:
                 continue
                 
             # 发现新的独立根/父域名，记录下来
-            result_tuples.append(current)
+            result_domains.append(current)
             last_parent = current
             last_len = len(current)
             
-        # 将元组重新拼回原始域名格式
-        return ['.'.join(t[::-1]) for t in result_tuples]
+        final_exact = []
+        final_suffix = []
+        for t in result_domains:
+            domain_str = '.'.join(t[::-1])
+            # 根据其在字典中的最高优先级 (后缀 > 精确) 还原到对应的列表中
+            if domain_types[domain_str] == 1:
+                final_suffix.append(domain_str)
+            else:
+                final_exact.append(domain_str)
+                
+        return final_exact, final_suffix
 
     def _merge_ip_rules(self, rules: List[str]) -> List[str]:
-        """
-        IP-CIDR 去重优化版：仅对完全一样的规则进行字符串去重，不进行网段聚合。
-        """
         if not rules:
             return []
             
@@ -215,7 +229,6 @@ class RulesMerger:
         
         for rule in rules:
             cleaned_rule = rule.strip()
-            # 仅处理基础的规则前缀提取，防止空规则
             parts = cleaned_rule.split(',', 1)
             if len(parts) < 2:
                 continue
@@ -238,8 +251,9 @@ class RulesMerger:
         source_type = source.get('type')
         if source_type == 'http':
             url = source.get('url', '')
-            logger.info(f"正在从网络下载规则 [格式: {rule_format}]: {url}")
+            logger.info(f"准备下载规则 [格式: {rule_format}]: {url}")
             raw_rules = self._fetch_http_rules(url, rule_format, source_behavior)
+            logger.info(f"规则下载成功: {url}")
         elif source_type == 'file':
             path = source.get('path', '')
             logger.info(f"正在读取本地规则文件 [格式: {rule_format}]: {path}")
@@ -247,7 +261,7 @@ class RulesMerger:
         else:
             return []
 
-        logger.info(f"正在清洗并转换数据，共获取到原始规则 {len(raw_rules)} 条...")
+        logger.info(f"正在清洗并转换数据，该源共获取到原始规则 {len(raw_rules)} 条...")
         converted = []
         for rule in raw_rules:
             if rule is None:
@@ -269,10 +283,10 @@ class RulesMerger:
         return converted
 
     def _fetch_http_rules(self, url: str, rule_format: str, behavior: str) -> List[Any]:
-        max_retries = 8
-        retry_delay = 3  # 重试等待时间（秒）
+        retry_delay = 5 
+        attempt = 1
         
-        for attempt in range(1, max_retries + 1):
+        while True:
             try:
                 resp = requests.get(url, timeout=30)
                 resp.raise_for_status()
@@ -305,19 +319,13 @@ class RulesMerger:
                 return content.splitlines()
 
             except requests.exceptions.RequestException as e:
-                # 仅在遇到网络请求失败时重试
-                if attempt < max_retries:
-                    logger.warning(f"网络异常，获取规则失败 {url} [正在进行第 {attempt}/{max_retries} 次重试]，等待 {retry_delay} 秒... (原因: {e})")
-                    time.sleep(retry_delay)
-                else:
-                    logger.error(f"获取在线规则彻底失败 {url}，已达到最大重试次数 {max_retries} 次: {e}")
-                    return []
+                logger.warning(f"网络异常，获取规则失败 {url} [正在进行第 {attempt} 次重试]，等待 {retry_delay} 秒... (原因: {e})")
+                time.sleep(retry_delay)
+                attempt += 1
             except Exception as e:
-                # 解析错误等非网络层级的错误直接抛错不重试
-                logger.error(f"解析在线规则异常 {url}: {e}")
-                return []
-                
-        return []
+                logger.warning(f"解析在线规则异常 {url} [正在进行第 {attempt} 次重试]，等待 {retry_delay} 秒... (原因: {e})")
+                time.sleep(retry_delay)
+                attempt += 1
 
     def _read_local_rules(self, path: str, rule_format: str, behavior: str) -> List[Any]:
         try:
@@ -348,7 +356,7 @@ class RulesMerger:
             return []
         except json.JSONDecodeError as e:
             logger.error(f"解析 sing-box JSON 失败: {e}")
-            return []
+            raise e 
 
     @staticmethod
     def _extract_yaml_rules(data: Any, source: str) -> List[str]:
@@ -614,7 +622,8 @@ class RulesMerger:
                 rules = self._fetch_rules_from_source(source_config, target_behavior)
                 all_rules.extend(rules)
 
-            logger.info(f"原始输入规则数: {self._stats['total']}, 成功转换: {self._stats['converted']}, 丢弃: {self._stats['dropped']}")
+            logger.info(f"所有规则源下载完毕，原始输入规则数: {self._stats['total']}, 成功转换: {self._stats['converted']}, 丢弃: {self._stats['dropped']}")
+            logger.info("开始进行规则去重与合并...")
 
             if target_behavior == 'sing-box':
                 dict_rules = []
@@ -637,7 +646,7 @@ class RulesMerger:
                 str_rules = [str(r) for r in all_rules if r is not None]
                 final_rules = self._deduplicate_and_merge_classical(str_rules)
 
-            logger.info(f"去重和聚合后规则数: {len(final_rules)}, 减少重复/重叠项: {self._stats['duplicates']}")
+            logger.info(f"去重和聚合完成！最终规则数: {len(final_rules)}, 共减少重复/冗余项: {self._stats['duplicates']}")
 
             output_file = config['path']
             self._write_rules(
@@ -649,7 +658,6 @@ class RulesMerger:
             )
 
     def _deduplicate_and_merge_classical(self, rules: List[str]) -> List[str]:
-        """对 Classical 规则进行智能去重和合并"""
         domain_rules = []
         domain_suffix_rules = []
         domain_keyword_rules = []
@@ -680,9 +688,28 @@ class RulesMerger:
             else:
                 other_rules.append(rule)
 
-        # 域名智能去重
-        deduped_domain = self._deduplicate_domain_rules(domain_rules)
-        deduped_domain_suffix = self._deduplicate_domain_rules(domain_suffix_rules)
+        # 提取纯域名进行统一跨域智能去重
+        exact_list = []
+        for r in domain_rules:
+            parts = r.split(',', 1)
+            if len(parts) == 2:
+                exact_list.append(parts[1].strip())
+                
+        suffix_list = []
+        for r in domain_suffix_rules:
+            parts = r.split(',', 1)
+            if len(parts) == 2:
+                suffix_list.append(parts[1].strip())
+
+        final_exact, final_suffix = self._unified_domain_deduplication(exact_list, suffix_list)
+        
+        # 计算剔除的重复/子域名数量并计入统计
+        diff = (len(exact_list) + len(suffix_list)) - (len(final_exact) + len(final_suffix))
+        if diff > 0:
+            self._stats['duplicates'] += diff
+
+        deduped_domain = [f"DOMAIN,{d}" for d in final_exact]
+        deduped_domain_suffix = [f"DOMAIN-SUFFIX,{d}" for d in final_suffix]
 
         # IP 去重 (完全相同去重)
         merged_ip_cidr = self._merge_ip_rules(ip_cidr_rules)
@@ -716,23 +743,7 @@ class RulesMerger:
 
         return result
 
-    def _deduplicate_domain_rules(self, rules: List[str]) -> List[str]:
-        """对域名规则进行智能去重"""
-        if not rules:
-            return []
-        domain_map = {}
-        for rule in rules:
-            parts = rule.split(',', 1)
-            if len(parts) == 2:
-                domain = parts[1].strip()
-                domain_map[domain] = rule
-        if not domain_map:
-            return rules
-        deduped_domains = self._deduplicate_domains(list(domain_map.keys()))
-        return [domain_map[d] for d in deduped_domains]
-
     def _merge_dst_port_rules(self, rules: List[str]) -> Optional[str]:
-        """合并所有 DST-PORT 规则"""
         if not rules:
             return None
         all_items = []
@@ -752,7 +763,6 @@ class RulesMerger:
         return "DST-PORT," + "/".join(merged_items)
 
     def _compile_final_sing_box_list(self, rules: List[Dict]) -> List[Dict]:
-        """编译最终 Sing-Box 规则列表（含端口优化、域名去重和 IP 网段纯字符串去重）"""
         bucket = {key: [] for key in SING_BOX_LIST_FIELDS}
         passthrough_rules = []
 
@@ -762,13 +772,24 @@ class RulesMerger:
             else:
                 passthrough_rules.append(rule)
 
-        # 域名智能去重
-        if bucket['domain']:
-            bucket['domain'] = self._deduplicate_domains([str(d) for d in bucket['domain']])
-        if bucket['domain_suffix']:
-            bucket['domain_suffix'] = self._deduplicate_domains([str(s) for s in bucket['domain_suffix']])
+        # 域名统一跨域智能去重 (精确域名与后缀域名混合剔除子域名)
+        exact_list = bucket.get('domain', [])
+        suffix_list = bucket.get('domain_suffix', [])
+        
+        if exact_list or suffix_list:
+            final_exact, final_suffix = self._unified_domain_deduplication(
+                [str(d) for d in exact_list], 
+                [str(s) for s in suffix_list]
+            )
+            
+            diff = (len(exact_list) + len(suffix_list)) - (len(final_exact) + len(final_suffix))
+            if diff > 0:
+                self._stats['duplicates'] += diff
+                
+            bucket['domain'] = final_exact
+            bucket['domain_suffix'] = final_suffix
 
-        # IP 纯字符串去重（不进行网段重叠聚合）
+        # IP 纯字符串去重
         if bucket['ip_cidr']:
             original_len = len(bucket['ip_cidr'])
             seen_ips = set()
@@ -797,7 +818,7 @@ class RulesMerger:
                 if '-' in item:
                     new_port_range.append(item.replace('-', ':'))
                 else:
-                    new_port.append(int(item)) # sing-box 建议单端口转为int
+                    new_port.append(int(item))
             bucket['port'] = new_port
             bucket['port_range'] = new_port_range
 
