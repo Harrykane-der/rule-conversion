@@ -482,7 +482,52 @@
       type: http
       url: https://github.com/SagerNet/sing-geosite/raw/refs/heads/rule-set/geosite-category-media.srs
       format: srs
-      behavior: singbox 
+      behavior: singbox
+    cresky_gfw:
+      type: http
+      url: https://github.com/cresky-github/geosite/raw/refs/heads/main/proxy.mrs
+      format: mrs
+      behavior: domain
+    QuixoticHeart_github:
+      type: http
+      url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/gits.mrs
+      format: mrs
+      behavior: domain
+    MetaCubeX_github:
+      type: http
+      url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/github.mrs
+      format: mrs
+      behavior: domain
+    SagerNet_github:
+      type: http
+      url: https://github.com/SagerNet/sing-geosite/raw/refs/heads/rule-set/geosite-github.srs
+      format: srs
+      behavior: singbox
+    DustinWin_ai:
+      type: http
+      url: https://github.com/DustinWin/domain-list-custom/releases/download/domains/ai.list
+      format: text
+      behavior: classical
+    ACL4SSR_ai:
+      type: http
+      url: https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/refs/heads/master/Clash/Ruleset/AI.list
+      format: text
+      behavior: classical
+    category-ai-!cn:
+      type: http
+      url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/category-ai-!cn.mrs
+      format: mrs
+      behavior: domain
+    QuixoticHeart_AI:
+      type: http
+      url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/ai.mrs
+      format: mrs
+      behavior: domain
+    local_ai:
+      type: file
+      path: local/ai.yaml
+      format: yaml
+      behavior: classical
       
 
 - path: output/gfw.yaml
