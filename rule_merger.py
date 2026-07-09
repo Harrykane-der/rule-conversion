@@ -5,6 +5,7 @@ import tempfile
 import requests
 import os
 import logging
+import time  # 新增：用于重试间隔等待
 from typing import List, Dict, Optional, Any, Union, Tuple
 from contextlib import contextmanager
 import re
@@ -268,35 +269,55 @@ class RulesMerger:
         return converted
 
     def _fetch_http_rules(self, url: str, rule_format: str, behavior: str) -> List[Any]:
-        try:
-            resp = requests.get(url, timeout=30)
-            resp.raise_for_status()
-            content = resp.text
-            if rule_format == 'json':
-                return self._parse_sing_box_source_to_list(content)
-            if rule_format == 'srs':
-                with self._temp_file('.srs') as tmp_srs:
-                    with open(tmp_srs, 'wb') as f:
-                        f.write(resp.content)
-                    decompiled = self._decompile_srs_to_json_str(tmp_srs)
-                    return self._parse_sing_box_source_to_list(decompiled)
-            content_type = resp.headers.get('content-type', '')
-            is_yaml = (rule_format == 'yaml') or (
-                rule_format not in ('mrs', 'text', 'json', 'srs') and
-                ('yaml' in content_type or url.endswith(('.yml', '.yaml')))
-            )
-            if is_yaml:
-                data = yaml.safe_load(content)
-                return self._extract_yaml_rules(data, url)
-            if rule_format == 'mrs':
-                with self._temp_file('.mrs') as tmp_mrs:
-                    with open(tmp_mrs, 'wb') as f:
-                        f.write(resp.content)
-                    return self._read_mrs_file(tmp_mrs, behavior)
-            return content.splitlines()
-        except Exception as e:
-            logger.error(f"获取在线规则失败 {url}: {e}")
-            return []
+        max_retries = 8
+        retry_delay = 3  # 重试等待时间（秒）
+        
+        for attempt in range(1, max_retries + 1):
+            try:
+                resp = requests.get(url, timeout=30)
+                resp.raise_for_status()
+                content = resp.text
+                
+                if rule_format == 'json':
+                    return self._parse_sing_box_source_to_list(content)
+                if rule_format == 'srs':
+                    with self._temp_file('.srs') as tmp_srs:
+                        with open(tmp_srs, 'wb') as f:
+                            f.write(resp.content)
+                        decompiled = self._decompile_srs_to_json_str(tmp_srs)
+                        return self._parse_sing_box_source_to_list(decompiled)
+                        
+                content_type = resp.headers.get('content-type', '')
+                is_yaml = (rule_format == 'yaml') or (
+                    rule_format not in ('mrs', 'text', 'json', 'srs') and
+                    ('yaml' in content_type or url.endswith(('.yml', '.yaml')))
+                )
+                if is_yaml:
+                    data = yaml.safe_load(content)
+                    return self._extract_yaml_rules(data, url)
+                    
+                if rule_format == 'mrs':
+                    with self._temp_file('.mrs') as tmp_mrs:
+                        with open(tmp_mrs, 'wb') as f:
+                            f.write(resp.content)
+                        return self._read_mrs_file(tmp_mrs, behavior)
+                        
+                return content.splitlines()
+
+            except requests.exceptions.RequestException as e:
+                # 仅在遇到网络请求失败时重试
+                if attempt < max_retries:
+                    logger.warning(f"网络异常，获取规则失败 {url} [正在进行第 {attempt}/{max_retries} 次重试]，等待 {retry_delay} 秒... (原因: {e})")
+                    time.sleep(retry_delay)
+                else:
+                    logger.error(f"获取在线规则彻底失败 {url}，已达到最大重试次数 {max_retries} 次: {e}")
+                    return []
+            except Exception as e:
+                # 解析错误等非网络层级的错误直接抛错不重试
+                logger.error(f"解析在线规则异常 {url}: {e}")
+                return []
+                
+        return []
 
     def _read_local_rules(self, path: str, rule_format: str, behavior: str) -> List[Any]:
         try:
