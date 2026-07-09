@@ -253,7 +253,8 @@ class RulesMerger:
             url = source.get('url', '')
             logger.info(f"准备下载规则 [格式: {rule_format}]: {url}")
             raw_rules = self._fetch_http_rules(url, rule_format, source_behavior)
-            logger.info(f"规则下载成功: {url}")
+            if raw_rules:
+                logger.info(f"规则下载成功: {url}")
         elif source_type == 'file':
             path = source.get('path', '')
             logger.info(f"正在读取本地规则文件 [格式: {rule_format}]: {path}")
@@ -284,9 +285,10 @@ class RulesMerger:
 
     def _fetch_http_rules(self, url: str, rule_format: str, behavior: str) -> List[Any]:
         retry_delay = 5 
+        max_attempts = 8
         attempt = 1
         
-        while True:
+        while attempt <= max_attempts:
             try:
                 resp = requests.get(url, timeout=30)
                 resp.raise_for_status()
@@ -319,13 +321,21 @@ class RulesMerger:
                 return content.splitlines()
 
             except requests.exceptions.RequestException as e:
-                logger.warning(f"网络异常，获取规则失败 {url} [正在进行第 {attempt} 次重试]，等待 {retry_delay} 秒... (原因: {e})")
+                if attempt >= max_attempts:
+                    logger.error(f"网络异常，获取规则失败 {url} [已达到最大重试次数 {max_attempts} 次]，将跳过此源并继续。(原因: {e})")
+                    return []
+                logger.warning(f"网络异常，获取规则失败 {url} [正在进行第 {attempt} 次重试 / 共 {max_attempts} 次]，等待 {retry_delay} 秒... (原因: {e})")
                 time.sleep(retry_delay)
                 attempt += 1
             except Exception as e:
-                logger.warning(f"解析在线规则异常 {url} [正在进行第 {attempt} 次重试]，等待 {retry_delay} 秒... (原因: {e})")
+                if attempt >= max_attempts:
+                    logger.error(f"解析在线规则异常 {url} [已达到最大重试次数 {max_attempts} 次]，将跳过此源并继续。(原因: {e})")
+                    return []
+                logger.warning(f"解析在线规则异常 {url} [正在进行第 {attempt} 次重试 / 共 {max_attempts} 次]，等待 {retry_delay} 秒... (原因: {e})")
                 time.sleep(retry_delay)
                 attempt += 1
+                
+        return []
 
     def _read_local_rules(self, path: str, rule_format: str, behavior: str) -> List[Any]:
         try:
