@@ -419,16 +419,6 @@
   format: mrs
   behavior: domain
   upstream: &gfw_upstream
-    telegram:
-      type: http
-      url: https://ruleset.skk.moe/Clash/non_ip/telegram.txt
-      format: text
-      behavior: classical
-    xndeye_proxy:
-      type: file
-      path: local/proxy.yaml
-      format: yaml
-      behavior: classical
     gfw:
       type: http
       url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/meta/geo/geosite/gfw.mrs
@@ -483,11 +473,16 @@
       url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/gfw.mrs
       format: mrs
       behavior: domain
-    cresky_gfw:
+    MetaCubeX_media:
       type: http
-      url: https://github.com/cresky-github/geosite/raw/refs/heads/main/proxy.mrs
+      url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/category-media.mrs
       format: mrs
       behavior: domain
+    SagerNet_category_media:
+      type: http
+      url: https://github.com/SagerNet/sing-geosite/raw/refs/heads/rule-set/geosite-category-media.srs
+      format: srs
+      behavior: singbox 
       
 
 - path: output/gfw.yaml
