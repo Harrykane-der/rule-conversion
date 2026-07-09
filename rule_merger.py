@@ -170,8 +170,8 @@ class RulesMerger:
         """
         超高速跨类型域名智能去重：
         将精确域名 (exact) 和后缀域名 (suffix) 统一合并。
-        如果出现父域名（如 baidu.com）和子域名（如 sdk.baidu.com），则无条件剔除子域名，仅保留父域名。
-        若同一域名既是精确又是后缀，则升级保留为后缀。
+        如果出现父域名（如 baidu.com）和子域名（如 ddj.baidu.com），无条件剔除子域名，仅保留父域名。
+        【重点优化】：当发生子域名被父域名“吞并”时，自动将该父域名升级为“后缀匹配 (Suffix)”。
         """
         domain_types = {}
         
@@ -186,12 +186,15 @@ class RulesMerger:
             if d:
                 d_str = str(d).strip()
                 if d_str:
+                    # 如果同一域名既是精确又是后缀，后写入的 1 会直接覆盖 0，实现优先级自然升级
                     domain_types[d_str] = 1
                     
         if not domain_types:
             return [], []
 
-        # 将域名拆分并反转，例：sub.example.com -> ('com', 'example', 'sub')
+        # 核心算法：将域名按层级反转并排序
+        # 例如：zjxud.baidu.com -> ('com', 'baidu', 'zjxud')
+        # 排序后，父域名必然紧挨在它所有的子域名之前
         reversed_tuples = sorted(tuple(d.split('.'))[::-1] for d in domain_types.keys())
         
         result_domains = []
@@ -199,11 +202,15 @@ class RulesMerger:
         last_len = 0
         
         for current in reversed_tuples:
-            # 如果当前域名是上一个父域名的子域名，则剔除（跳过）
+            # 判断当前域名是否为上一个父域名的子域名
             if last_parent and len(current) > last_len and current[:last_len] == last_parent:
+                # 触发子域名剔除逻辑！
+                # 既然吞并了子域名，为了保证子域名的流量依然能匹配到，将父域名强制升级为后缀 (suffix)
+                parent_str = '.'.join(last_parent[::-1])
+                domain_types[parent_str] = 1
                 continue
                 
-            # 发现新的独立根/父域名，记录下来
+            # 发现新的独立根/父域名，记录下来作为新的对比基准
             result_domains.append(current)
             last_parent = current
             last_len = len(current)
@@ -211,8 +218,9 @@ class RulesMerger:
         final_exact = []
         final_suffix = []
         for t in result_domains:
+            # 把反转的元组恢复为正常域名
             domain_str = '.'.join(t[::-1])
-            # 根据其在字典中的最高优先级 (后缀 > 精确) 还原到对应的列表中
+            # 根据其在字典中的最终状态 (可能在合并时被升级为 1) 还原到对应的列表中
             if domain_types[domain_str] == 1:
                 final_suffix.append(domain_str)
             else:
