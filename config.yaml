@@ -489,11 +489,6 @@
       url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/gfw.mrs
       format: mrs
       behavior: domain
-    cresky_gfw:
-      type: http
-      url: https://github.com/cresky-github/geosite/raw/refs/heads/main/proxy.mrs
-      format: mrs
-      behavior: domain
     QuixoticHeart_github:
       type: http
       url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/gits.mrs
