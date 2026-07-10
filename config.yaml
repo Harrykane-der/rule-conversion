@@ -107,7 +107,12 @@
 - path: output/adblock.mrs
   format: mrs
   behavior: domain
-  upstream: &adblock_upstream
+  upstream: &adblock_upstream 
+    adblock_list:
+      type: http
+      url: https://github.com/xndeye/adblock_list/raw/refs/heads/release/clash.yaml
+      format: yaml
+      behavior: domain  
     adblock:
       type: http
       url: https://github.com/Harrykane-der/AdRules/raw/refs/heads/main/adrules-mihomo.mrs
