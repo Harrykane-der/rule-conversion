@@ -611,6 +611,11 @@
       url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/category-media.mrs
       format: mrs
       behavior: domain
+    QuixoticHeart_media:
+      type: http
+      url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/domain/socialmedia.mrs
+      format: mrs
+      behavior: domain
     SagerNet_category_media:
       type: http
       url: https://github.com/SagerNet/sing-geosite/raw/refs/heads/rule-set/geosite-category-media.srs
