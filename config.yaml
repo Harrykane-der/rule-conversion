@@ -761,6 +761,31 @@
   behavior: sing-box
   upstream: *twitter_upstream
 
+- path: output/telegram.mrs
+  format: mrs
+  behavior: ipcidr
+  upstream: &telegram_upstream
+    telegram:
+      type: http
+      url: https://github.com/MetaCubeX//meta-rules-dat/raw/refs/heads/meta/geo-lite/geosite/telegram.mrs
+      format: mrs
+      behavior: domain
+
+- path: output/telegram.yaml
+  format: yaml
+  behavior: ipcidr
+  upstream: *telegram_upstream
+
+- path: output/telegram.json
+  format: json
+  behavior: sing-box
+  upstream: *telegram_upstream
+
+- path: output/telegram.srs
+  format: srs
+  behavior: sing-box
+  upstream: *telegram_upstream
+
 - path: output/telegram_ip.mrs
   format: mrs
   behavior: ipcidr
