@@ -134,7 +134,6 @@
       format: srs
       behavior: singbox
 
-
 - path: output/adblock.yaml
   format: yaml
   behavior: domain
@@ -165,8 +164,6 @@
       url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/meta/ipcidr/adrules.mrs
       format: mrs
       behavior: ipcidr
-
-
 
 - path: output/adblock_ip.yaml
   format: yaml
@@ -283,7 +280,6 @@
   behavior: sing-box
   upstream: *bilibili_upstream
 
-
 # direct
 - path: output/cn.mrs
   format: mrs
@@ -314,7 +310,6 @@
       path: local/direct.yaml
       format: yaml
       behavior: classical
-    
 
 - path: output/cn.yaml
   format: yaml
@@ -371,7 +366,6 @@
   format: srs
   behavior: sing-box
   upstream: *cn_ip_upstream
-
 
 # ai
 - path: output/ai.mrs
@@ -534,13 +528,11 @@
       path: local/ai.yaml
       format: yaml
       behavior: classical
-      
 
 - path: output/gfw.yaml
   format: yaml
   behavior: domain
   upstream: *gfw_upstream
-
 
 - path: output/gfw.json
   format: json
@@ -551,8 +543,6 @@
   format: srs
   behavior: sing-box
   upstream: *gfw_upstream
-
-
 
 # fakeip-filter
 - path: output/fakeip-filter.mrs
@@ -579,8 +569,6 @@
       url: https://github.com/Harrykane-der/my-rules/raw/refs/heads/main/fakeip-filter.yaml
       format: yaml
       behavior: domain
-      
-    
 
 - path: output/fakeip-filter.yaml
   format: yaml
@@ -657,7 +645,6 @@
       format: srs
       behavior: singbox
 
-
 - path: output/github.yaml
   format: yaml
   behavior: domain
@@ -672,3 +659,154 @@
   format: srs
   behavior: sing-box
   upstream: *github_upstream
+
+# 新增规则集（全格式）
+- path: output/google_fcm.mrs
+  format: mrs
+  behavior: domain
+  upstream: &google_fcm_upstream
+    google_fcm:
+      type: http
+      url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/singbox/version5/googlefcm.srs
+      format: srs
+      behavior: singbox
+
+- path: output/google_fcm.yaml
+  format: yaml
+  behavior: domain
+  upstream: *google_fcm_upstream
+
+- path: output/google_fcm.json
+  format: json
+  behavior: sing-box
+  upstream: *google_fcm_upstream
+
+- path: output/google_fcm.srs
+  format: srs
+  behavior: sing-box
+  upstream: *google_fcm_upstream
+
+- path: output/google.mrs
+  format: mrs
+  behavior: domain
+  upstream: &google_upstream
+    google:
+      type: http
+      url: https://github.com/QuixoticHeart/rule-set/raw/refs/heads/ruleset/singbox/version5/google.srs
+      format: srs
+      behavior: singbox
+
+- path: output/google.yaml
+  format: yaml
+  behavior: domain
+  upstream: *google_upstream
+
+- path: output/google.json
+  format: json
+  behavior: sing-box
+  upstream: *google_upstream
+
+- path: output/google.srs
+  format: srs
+  behavior: sing-box
+  upstream: *google_upstream
+
+- path: output/pixiv.mrs
+  format: mrs
+  behavior: domain
+  upstream: &pixiv_upstream
+    pixiv:
+      type: http
+      url: https://github.com/Yuu518/sing-box-rules/raw/refs/heads/rule_set/rule_set_site/pixiv.srs
+      format: srs
+      behavior: singbox
+
+- path: output/pixiv.yaml
+  format: yaml
+  behavior: domain
+  upstream: *pixiv_upstream
+
+- path: output/pixiv.json
+  format: json
+  behavior: sing-box
+  upstream: *pixiv_upstream
+
+- path: output/pixiv.srs
+  format: srs
+  behavior: sing-box
+  upstream: *pixiv_upstream
+
+- path: output/twitter.mrs
+  format: mrs
+  behavior: domain
+  upstream: &twitter_upstream
+    twitter:
+      type: http
+      url: https://github.com/Yuu518/sing-box-rules/raw/refs/heads/rule_set/rule_set_site/twitter.srs
+      format: srs
+      behavior: singbox
+
+- path: output/twitter.yaml
+  format: yaml
+  behavior: domain
+  upstream: *twitter_upstream
+
+- path: output/twitter.json
+  format: json
+  behavior: sing-box
+  upstream: *twitter_upstream
+
+- path: output/twitter.srs
+  format: srs
+  behavior: sing-box
+  upstream: *twitter_upstream
+
+- path: output/telegram_ip.mrs
+  format: mrs
+  behavior: ipcidr
+  upstream: &telegram_ip_upstream
+    telegram_ip:
+      type: http
+      url: https://github.com/DustinWin/ruleset_geodata/releases/download/sing-box-ruleset/telegramip.srs
+      format: srs
+      behavior: singbox
+
+- path: output/telegram_ip.yaml
+  format: yaml
+  behavior: ipcidr
+  upstream: *telegram_ip_upstream
+
+- path: output/telegram_ip.json
+  format: json
+  behavior: sing-box
+  upstream: *telegram_ip_upstream
+
+- path: output/telegram_ip.srs
+  format: srs
+  behavior: sing-box
+  upstream: *telegram_ip_upstream
+
+- path: output/google_cn.mrs
+  format: mrs
+  behavior: domain
+  upstream: &google_cn_upstream
+    google_cn:
+      type: http
+      url: https://github.com/DustinWin/ruleset_geodata/releases/download/sing-box-ruleset/google-cn.srs
+      format: srs
+      behavior: singbox
+
+- path: output/google_cn.yaml
+  format: yaml
+  behavior: domain
+  upstream: *google_cn_upstream
+
+- path: output/google_cn.json
+  format: json
+  behavior: sing-box
+  upstream: *google_cn_upstream
+
+- path: output/google_cn.srs
+  format: srs
+  behavior: sing-box
+  upstream: *google_cn_upstream
