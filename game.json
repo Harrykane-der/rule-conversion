@@ -1,0 +1,19 @@
+{
+  "version": 5,
+  "rules": [
+    {
+      "domain_suffix": [
+        "applilink.jp",
+        "bc.googleusercontent.com",
+        "cloudfront.net",
+        "efootballhub.net",
+        "konami.*",
+        "konami.*.*",
+        "konami.net",
+        "konaminet.jp",
+        "people.aws.dev",
+        "pesdb.net"
+      ]
+    }
+  ]
+}

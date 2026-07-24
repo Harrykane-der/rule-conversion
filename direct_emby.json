@@ -1,0 +1,17 @@
+{
+  "version": 5,
+  "rules": [
+    {
+      "domain": [
+        "s3.array2026.com"
+      ]
+    },
+    {
+      "domain_suffix": [
+        "emby.bangumi.ca",
+        "emby.yun",
+        "gy1.66990000.xyz"
+      ]
+    }
+  ]
+}

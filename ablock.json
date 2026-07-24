@@ -1,0 +1,31 @@
+{
+  "version": 5,
+  "rules": [
+    {
+      "domain_keyword": [
+        "-ad",
+        "ad-",
+        "ad.",
+        "ads",
+        "httpdns",
+        "httpsdns",
+        "mcdn",
+        "p2p",
+        "stun"
+      ]
+    },
+    {
+      "port": [
+        53,
+        5349,
+        10000
+      ]
+    },
+    {
+      "port_range": [
+        "19302:19309",
+        "3478:3481"
+      ]
+    }
+  ]
+}
