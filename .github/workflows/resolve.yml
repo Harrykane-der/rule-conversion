@@ -21,19 +21,20 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      - name: Set up Mihomo (fixed version)
+      - name: Set up Mihomo latest
         run: |
-          VERSION="v1.19.29"
-          curl -fsSL -o mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/\( {VERSION}/mihomo-linux-amd64- \){VERSION}.gz
+          LATEST_TAG=$(curl -fsSL https://github.com/MetaCubeX/mihomo/releases/latest/download/version.txt)
+          curl -fsSL -o mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/${LATEST_TAG}/mihomo-linux-amd64-${LATEST_TAG}.gz
           gunzip mihomo.gz
           sudo mv mihomo /usr/local/bin/
           sudo chmod +x /usr/local/bin/mihomo
           mihomo -v
 
+          
       - name: Set up sing-box
         run: |
           VERSION=1.14.0-beta.4
-          curl -fsSL -o sing-box.tar.gz https://github.com/SagerNet/sing-box/releases/download/v\( {VERSION}/sing-box- \){VERSION}-linux-amd64.tar.gz
+          curl -fsSL -o sing-box.tar.gz https://github.com/SagerNet/sing-box/releases/download/v${VERSION}/sing-box-${VERSION}-linux-amd64.tar.gz
           tar -xzf sing-box.tar.gz
           sudo mv sing-box-${VERSION}-linux-amd64/sing-box /usr/local/bin/
           sudo chmod +x /usr/local/bin/sing-box
