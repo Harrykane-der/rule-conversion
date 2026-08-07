@@ -43,10 +43,12 @@ jobs:
       - name: Run script
         run: python rules_merger.py
 
-      - name: Force commit and push rules (allow empty)
+      - name: Force commit and push rules (tolerant to empty dir)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f rules/
+          if [ -d rules ] && [ "$(ls -A rules 2>/dev/null)" ]; then
+            git add -f rules/
+          fi
           git commit --allow-empty -m "🚀 Update rules at $(date +'%Y-%m-%d %H:%M:%S')"
           git push --force
