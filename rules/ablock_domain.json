@@ -1,0 +1,19 @@
+{
+  "version": 5,
+  "rules": [
+    {
+      "domain_keyword": [
+        "-ad",
+        "ad-",
+        "ad.",
+        "ads",
+        "ads5",
+        "httpdns",
+        "httpsdns",
+        "mcdn",
+        "p2p",
+        "stun"
+      ]
+    }
+  ]
+}
