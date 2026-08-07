@@ -44,12 +44,16 @@ jobs:
       - name: Run script
         run: python rules_merger.py
 
-      - name: Force commit and push rules (tolerant to empty dir)
+      - name: Force commit and push rules
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if [ -d rules ] && [ "$(ls -A rules 2>/dev/null)" ]; then
-            git add -f rules/
+          git add -f rules/ 2>/dev/null
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "🚀 Update rules at $(date -u +'%Y-%m-%d %H:%M:%S')"
+            git push origin ${{ github.ref_name }}
           fi
-          git commit --allow-empty -m "🚀 Update rules at $(date +'%Y-%m-%d %H:%M:%S')"
-          git push --force
