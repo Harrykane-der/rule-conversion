@@ -18,8 +18,7 @@ jobs:
           cache: 'pip'
 
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
       - name: Set up Mihomo latest
         run: |
@@ -28,7 +27,6 @@ jobs:
           gunzip mihomo.gz
           sudo mv mihomo /usr/local/bin/
           sudo chmod +x /usr/local/bin/mihomo
-          mihomo -v
 
       - name: Set up sing-box 1.14.0-beta.4
         run: |
@@ -37,13 +35,10 @@ jobs:
           tar -xzf sing-box.tar.gz
           sudo mv sing-box-${VERSION}-linux-amd64/sing-box /usr/local/bin/
           sudo chmod +x /usr/local/bin/sing-box
-          sing-box version
-          # 清理下载和解压残留，避免出现在仓库分支中
           rm -rf sing-box.tar.gz sing-box-${VERSION}-linux-amd64
 
-      - name: Clean up old rules
-        run: |
-          rm -rf rules
+      - name: Clean old generated rules
+        run: rm -rf rules/*          # 只删除文件，保留目录本身
 
       - name: Run script
         run: python rules_merger.py
