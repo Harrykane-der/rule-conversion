@@ -1,0 +1,14 @@
+{
+  "version": 5,
+  "rules": [
+    {
+      "domain_suffix": [
+        "booth.pm",
+        "fanbox.cc",
+        "pixiv.net",
+        "pixivision.net",
+        "pximg.net"
+      ]
+    }
+  ]
+}
