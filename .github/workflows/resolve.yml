@@ -37,8 +37,9 @@ jobs:
           sudo chmod +x /usr/local/bin/sing-box
           rm -rf sing-box.tar.gz sing-box-${VERSION}-linux-amd64
 
-      - name: Clean old generated rules
-        run: rm -rf rules/*
+      - name: Clear folder
+        run: |
+          find ./rules -mindepth 1 -delete
 
       - name: Run script
         run: python rules_merger.py
