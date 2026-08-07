@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up Python 3.10
+      - name: Set up Python 3.13
         uses: actions/setup-python@v6
         with:
           python-version: "3.13"
@@ -38,17 +38,15 @@ jobs:
           sudo mv sing-box-${VERSION}-linux-amd64/sing-box /usr/local/bin/
           sudo chmod +x /usr/local/bin/sing-box
           sing-box version
+          # 清理下载和解压残留，避免出现在仓库分支中
+          rm -rf sing-box.tar.gz sing-box-${VERSION}-linux-amd64
 
-
-      - name: Clean up
+      - name: Clean up old rules
         run: |
-          # 只删除 rules 文件夹（保留整个项目，避免误删代码）
           rm -rf rules
-      
 
       - name: Run script
         run: python rules_merger.py
-
 
       - name: Get current time
         id: time
