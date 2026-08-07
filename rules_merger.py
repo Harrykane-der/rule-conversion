@@ -57,7 +57,6 @@ class RulesMerger:
         self.session.mount('http://', HTTPAdapter(max_retries=retries))
         self.session.mount('https://', HTTPAdapter(max_retries=retries))
 
-        # ==================== 修改：输出目录改为 rules ====================
         self.output_dir = "rules"
         os.makedirs(self.output_dir, exist_ok=True)
 
@@ -748,9 +747,8 @@ class RulesMerger:
                     target_behavior=target_behavior
                 )
 
-            logger.info(f"[{path}] 聚合去重完成，最终规则数={len(final_rules)}，正在验证并写入...")
+            logger.info(f"[{path}] 聚合去重完成，最终规则数={len(final_rules)}，正在写入...")
 
-            # ==================== 修改：写入 rules 目录 ====================
             full_output_path = os.path.join(self.output_dir, os.path.basename(path))
             self._write_rules(full_output_path, final_rules, target_format, target_behavior, version)
 
@@ -922,36 +920,7 @@ class RulesMerger:
             return False
         return all(k in SING_BOX_LIST_FIELDS and all(isinstance(v, (str, int)) for v in self._as_list(v)) for k, v in rule.items())
 
-    # -------------------- 特性 1: 规则集有效性校验 --------------------
-    def _validate_generated_rules(self, tmp_file: str, rule_format: str, behavior: str) -> bool:
-        """在写入磁盘前，对新编译/生成的临时规则文件进行完备校验"""
-        if not os.path.exists(tmp_file) or os.path.getsize(tmp_file) == 0:
-            logger.error(f"校验失败: 临时文件不存在或大小为0 bytes [{tmp_file}]")
-            return False
-        try:
-            if rule_format == 'mrs':
-                read_back = self._read_mrs_file(tmp_file, behavior)
-                return len(read_back) > 0
-            elif rule_format == 'srs':
-                json_str = self._decompile_srs_to_json_str(tmp_file)
-                parsed = json.loads(self._clean_json_text(json_str))
-                return isinstance(parsed, dict) and ('rules' in parsed or 'payload' in parsed)
-            elif rule_format == 'json':
-                with open(tmp_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                return isinstance(data, dict) and 'rules' in data
-            elif rule_format == 'yaml':
-                with open(tmp_file, 'r', encoding='utf-8') as f:
-                    data = yaml.safe_load(f)
-                return isinstance(data, dict) and 'payload' in data
-            else:  # text / classical / domain / ipcidr
-                with open(tmp_file, 'r', encoding='utf-8') as f:
-                    valid_lines = [l for l in f if l.strip() and not l.startswith('#')]
-                return len(valid_lines) > 0
-        except Exception as e:
-            logger.error(f"生成的规则集校验抛出异常 [{tmp_file}]: {e}")
-            return False
-
+    # -------------------- 直接写入（无校验、无原子覆盖）--------------------
     def _prepare_rules_for_mrs(self, rules: List[Any], behavior: str) -> List[str]:
         cleaned = []
         for r in rules:
@@ -978,13 +947,10 @@ class RulesMerger:
 
         return list(dict.fromkeys(cleaned))
 
-    # -------------------- 特性 2: 全格式原子替换 --------------------
     def _write_rules(self, output_path: str, rules: List[Any], rule_format: str, behavior: str, version: int) -> None:
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-        # 临时文件写入相同目录，以便原子替换
-        with self._temp_file(f'.{rule_format}') as tmp_out:
-            success = False
+        try:
             if rule_format == 'mrs':
                 mrs_rules = self._prepare_rules_for_mrs(rules, behavior)
                 if not mrs_rules:
@@ -995,41 +961,39 @@ class RulesMerger:
                         f.write('\n'.join(mrs_rules) + '\n')
                     success = self._convert_to_binary(
                         self.mihomo_path,
-                        ['convert-ruleset', behavior, 'text', tmp_txt, tmp_out],
+                        ['convert-ruleset', behavior, 'text', tmp_txt, output_path],
                         'MRS'
                     )
+                if not success:
+                    logger.error(f"[{output_path}] MRS 编译失败，未生成文件")
+                    return
             elif rule_format == 'srs':
                 with self._temp_file('.json') as tmp_json:
                     with open(tmp_json, 'w', encoding='utf-8') as f:
                         json.dump({'version': version, 'rules': rules}, f, ensure_ascii=False, indent=2)
                     success = self._convert_to_binary(
                         self.sing_box_path,
-                        ['rule-set', 'compile', '--output', tmp_out, tmp_json],
+                        ['rule-set', 'compile', '--output', output_path, tmp_json],
                         'SRS'
                     )
+                if not success:
+                    logger.error(f"[{output_path}] SRS 编译失败，未生成文件")
+                    return
             elif rule_format == 'json':
-                with open(tmp_out, 'w', encoding='utf-8') as f:
+                with open(output_path, 'w', encoding='utf-8') as f:
                     json.dump({'version': version, 'rules': rules}, f, ensure_ascii=False, indent=2)
-                success = True
             elif rule_format == 'yaml':
-                with open(tmp_out, 'w', encoding='utf-8') as f:
+                with open(output_path, 'w', encoding='utf-8') as f:
                     yaml.dump({'payload': rules}, f, allow_unicode=True, sort_keys=False)
-                success = True
             else:  # text / classical / domain / ipcidr
-                with open(tmp_out, 'w', encoding='utf-8') as f:
+                with open(output_path, 'w', encoding='utf-8') as f:
                     f.write(f"# Update: {datetime.now():%Y-%m-%d %H:%M:%S} | Total: {len(rules)}\n")
                     f.write('\n'.join(str(r) for r in rules) + '\n')
-                success = True
 
-            # 校验生成规则的有效性
-            if not success or not self._validate_generated_rules(tmp_out, rule_format, behavior):
-                logger.error(f"[{output_path}] ❌ 规则集有效性校验未通过，中断替换，保留原有旧文件！")
-                return
+            logger.info(f"[{output_path}] ✅ 规则集写入完成，最终规则数: {len(rules)}")
 
-            # 系统级原子替换
-            os.replace(tmp_out, output_path)
-
-        logger.info(f"[{output_path}] ✅ 规则集已成功通过校验并完成原子覆盖，最终规则数: {len(rules)}")
+        except Exception as e:
+            logger.error(f"[{output_path}] ❌ 写入失败: {e}")
 
     # -------------------- 二进制工具支持 --------------------
     def _read_mrs_file(self, input_path: str, behavior: str) -> List[str]:
