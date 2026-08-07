@@ -30,9 +30,9 @@ jobs:
           sudo chmod +x /usr/local/bin/mihomo
           mihomo -v
 
-      - name: Set up sing-box v1.13.13
+      - name: Set up sing-box 1.14.0-beta.4
         run: |
-          VERSION=1.13.13
+          VERSION=1.14.0-beta.4
           curl -fsSL -o sing-box.tar.gz https://github.com/SagerNet/sing-box/releases/download/v${VERSION}/sing-box-${VERSION}-linux-amd64.tar.gz
           tar -xzf sing-box.tar.gz
           sudo mv sing-box-${VERSION}-linux-amd64/sing-box /usr/local/bin/
