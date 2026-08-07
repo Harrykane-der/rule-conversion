@@ -44,8 +44,7 @@ jobs:
         run: |
           # 只删除 rules 文件夹（保留整个项目，避免误删代码）
           rm -rf rules
-          # 如果 output 文件夹存在，也清理它
-          rm -rf output
+      
 
       - name: Run script
         run: python rules_merger.py
