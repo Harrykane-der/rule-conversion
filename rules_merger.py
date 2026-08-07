@@ -57,8 +57,8 @@ class RulesMerger:
         self.session.mount('http://', HTTPAdapter(max_retries=retries))
         self.session.mount('https://', HTTPAdapter(max_retries=retries))
 
-        # ==================== 修复：创建 output 目录 ====================
-        self.output_dir = "output"
+        # ==================== 修改：输出目录改为 rules ====================
+        self.output_dir = "rules"
         os.makedirs(self.output_dir, exist_ok=True)
 
         self._transformers = {
@@ -750,7 +750,7 @@ class RulesMerger:
 
             logger.info(f"[{path}] 聚合去重完成，最终规则数={len(final_rules)}，正在验证并写入...")
 
-            # ==================== 修复：写入 output 目录 ====================
+            # ==================== 修改：写入 rules 目录 ====================
             full_output_path = os.path.join(self.output_dir, os.path.basename(path))
             self._write_rules(full_output_path, final_rules, target_format, target_behavior, version)
 
@@ -982,7 +982,7 @@ class RulesMerger:
     def _write_rules(self, output_path: str, rules: List[Any], rule_format: str, behavior: str, version: int) -> None:
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-        # ==================== 修复：临时文件写入 output 目录 ====================
+        # 临时文件写入相同目录，以便原子替换
         with self._temp_file(f'.{rule_format}') as tmp_out:
             success = False
             if rule_format == 'mrs':
