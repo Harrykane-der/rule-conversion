@@ -87,11 +87,11 @@ jobs:
       # 清理旧规则
       - name: Clean old rules
         run: |
+          rm -rf rules
           mkdir -p rules
-          rm -rf rules/*
 
 
-      # 运行转换合并脚本
+      # 生成规则
       - name: Generate rule sets
         run: |
           python rules_merger.py
@@ -109,20 +109,25 @@ jobs:
           ls -lh rules/
 
 
-      # 提交并强制更新
-      - name: Commit and force push rules
+      # 强制覆盖当前分支规则并提交
+      - name: Commit and push rules
         run: |
+          set -e
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          # 生成时间戳，保证每次提交
+          date -u +"%Y-%m-%d %H:%M:%S UTC" > .rules_timestamp
+
+          # 添加规则和时间戳
           git add -f rules/
+          git add -f .rules_timestamp
 
+          # 每次必定产生提交
           git commit \
-            -m "🚀 Update rule sets $(date -u +'%Y-%m-%d %H:%M:%S')" \
-            || echo "No changes"
+            -m "🚀 Update rule sets $(date -u +'%Y-%m-%d %H:%M:%S')"
 
-          git fetch origin ${{ github.ref_name }}
-
+          # 推送当前分支
           git push \
-            --force-with-lease \
             origin HEAD:${{ github.ref_name }}
