@@ -87,7 +87,7 @@ jobs:
       # 清理旧规则
       - name: Clean old rules
         run: |
-          rm -rf /rules/
+          rm -rf rules
 
 
       # 生成规则
