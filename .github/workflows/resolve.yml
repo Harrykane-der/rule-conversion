@@ -5,29 +5,46 @@ on:
     - cron: '0 */1 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   run:
     runs-on: ubuntu-latest
 
     steps:
+
+      # 拉取仓库
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
+
+      # Python环境
       - name: Set up Python 3.13
         uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: pip
 
+
+      # 安装Python依赖
       - name: Install dependencies
         run: |
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Set up Mihomo latest
+
+      # 下载最新版 Mihomo
+      - name: Download Mihomo
         run: |
-          LATEST_TAG=$(curl -fsSL https://github.com/MetaCubeX/mihomo/releases/latest/download/version.txt)
+          set -e
+
+          LATEST_TAG=$(curl -fsSL \
+            https://github.com/MetaCubeX/mihomo/releases/latest/download/version.txt)
+
+          echo "Mihomo version: ${LATEST_TAG}"
 
           curl -fsSL \
             -o mihomo.gz \
@@ -35,14 +52,19 @@ jobs:
 
           gunzip mihomo.gz
 
-          sudo mv mihomo /usr/local/bin/mihomo
-          sudo chmod +x /usr/local/bin/mihomo
+          sudo install -m 755 mihomo /usr/local/bin/mihomo
 
           mihomo -v
 
-      - name: Set up sing-box 1.14.0-beta.4
+
+      # 下载 sing-box
+      - name: Download sing-box
         run: |
-          VERSION=1.14.0-beta.4
+          set -e
+
+          VERSION="1.14.0-beta.4"
+
+          echo "sing-box version: ${VERSION}"
 
           curl -fsSL \
             -o sing-box.tar.gz \
@@ -50,25 +72,45 @@ jobs:
 
           tar -xzf sing-box.tar.gz
 
-          sudo mv sing-box-${VERSION}-linux-amd64/sing-box /usr/local/bin/sing-box
-          sudo chmod +x /usr/local/bin/sing-box
+          sudo install \
+            -m 755 \
+            sing-box-${VERSION}-linux-amd64/sing-box \
+            /usr/local/bin/sing-box
 
-          rm -rf sing-box.tar.gz sing-box-${VERSION}-linux-amd64
+          rm -rf \
+            sing-box.tar.gz \
+            sing-box-${VERSION}-linux-amd64
 
           sing-box version
 
-      - name: Clear old rules
+
+      # 清理旧规则
+      - name: Clean old rules
         run: |
           mkdir -p rules
-          find ./rules -mindepth 1 -delete
+          rm -rf rules/*
 
-      - name: Run rules merger
+
+      # 运行转换合并脚本
+      - name: Generate rule sets
         run: |
           python rules_merger.py
 
-      - name: Force update rules
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 检查生成结果
+      - name: Check generated rules
+        run: |
+          if [ ! "$(ls -A rules)" ]; then
+            echo "❌ rules目录为空，停止提交"
+            exit 1
+          fi
+
+          echo "✅ Generated rules:"
+          ls -lh rules/
+
+
+      # 提交并强制更新
+      - name: Commit and force push rules
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -76,8 +118,10 @@ jobs:
           git add -f rules/
 
           git commit \
-            -m "🚀 Force update rules at $(date -u +'%Y-%m-%d %H:%M:%S')" \
-            || true
+            -m "🚀 Update rule sets $(date -u +'%Y-%m-%d %H:%M:%S')" \
+            || echo "No changes"
+
+          git fetch origin ${{ github.ref_name }}
 
           git push \
             --force-with-lease \
