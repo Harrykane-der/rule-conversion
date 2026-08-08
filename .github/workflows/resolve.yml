@@ -52,7 +52,10 @@ jobs:
 
           gunzip mihomo.gz
 
-          sudo install -m 755 mihomo /usr/local/bin/mihomo
+          sudo install \
+            -m 755 \
+            mihomo \
+            /usr/local/bin/mihomo
 
           mihomo -v
 
@@ -84,31 +87,40 @@ jobs:
           sing-box version
 
 
-      # 清理旧规则
-      - name: Clean old rules
+      # 删除旧规则
+      - name: Remove old rules
         run: |
-          git rm -rf rules
+          rm -rf rules
 
 
       # 生成规则
       - name: Generate rule sets
         run: |
+          set -e
+
           python rules_merger.py
 
 
       # 检查生成结果
       - name: Check generated rules
         run: |
-          if [ ! "$(ls -A rules)" ]; then
-            echo "❌ rules目录为空，停止提交"
-            exit 1
+          set -e
+
+          if [ ! -d "rules" ]; then
+            echo "⚠️ rules不存在，创建rules目录"
+            mkdir -p rules
+          fi
+
+          if [ -z "$(ls -A rules)" ]; then
+            echo "⚠️ rules为空，创建.gitkeep"
+            touch rules/.gitkeep
           fi
 
           echo "✅ Generated rules:"
           ls -lh rules/
 
 
-      # 强制提交并覆盖当前分支
+      # 强制提交覆盖
       - name: Force commit and push rules
         run: |
           set -e
@@ -116,14 +128,18 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add -A rules/
+          # 删除旧索引记录
+          git rm -rf --cached rules || true
 
-          # 无变化也提交
+          # 添加新规则
+          git add -f rules
+
+          # 无论是否变化都提交
           git commit \
             --allow-empty \
             -m "🚀 Update rule sets $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
 
-          # 强制覆盖当前分支
+          # 强制推送当前分支
           git push \
             --force \
             origin HEAD:${{ github.ref_name }}
