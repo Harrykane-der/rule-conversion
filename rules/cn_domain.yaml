@@ -131951,7 +131951,10 @@ payload:
 - +.aichongzoo.cn
 - +.aiqicha.baidu.com
 - +.aiqicha.cn
+- +.airchina.cn
 - +.airchina.com.cn
+- +.airchinalimited.cn
+- +.airchinalimited.com.cn
 - +.aireads.cn
 - +.airitilibrary.cn
 - +.akikocorp.cn
@@ -132226,6 +132229,7 @@ payload:
 - +.byteplusapi-test.com.cn
 - +.byteplusapi.com.cn
 - +.bytepluses.com.cn
+- +.byteurl.cn
 - +.bytevcloudapi.com
 - +.bytexns.cn
 - +.bzclk.baidu.com
@@ -132239,6 +132243,7 @@ payload:
 - +.canon.com.cn
 - +.caocao.com.cn
 - +.caocaokeji.cn
+- +.capcut.cn
 - +.cb.baidu.com
 - +.cbern.com.cn
 - +.cbjs.baidu.com
@@ -132422,6 +132427,9 @@ payload:
 - +.cmicrwx.cn
 - +.cmicvip.cn
 - +.cmvideo.cn
+- +.cn-beijing.aliyuncs.com
+- +.cn-chengdu.aliyuncs.com
+- +.cn-guangzhou.aliyuncs.com
 - +.cn-hangzhou.aliyuncs.com
 - +.cn-shanghai.aliyuncs.com
 - +.cnht.com.cn
@@ -132516,6 +132524,7 @@ payload:
 - +.cup62.cn
 - +.cupid.iqiyi.com
 - +.cww.net.cn
+- +.cxzx10086.cn
 - +.cyber-bay.cn
 - +.cyber-bay.com.cn
 - +.cytxl.com.cn
@@ -132885,6 +132894,7 @@ payload:
 - +.hoopchina.com.cn
 - +.hophing.cn
 - +.hophing.com.cn
+- +.hotfix-api.aliyuncs.com
 - +.hpplay.cn
 - +.hpstore.cn
 - +.hq-tracking.qq.com
@@ -133397,6 +133407,7 @@ payload:
 - +.neweekly.com.cn
 - +.news.cn
 - +.newsimg.cn
+- +.nfcos.cn
 - +.nga.cn
 - +.nihaorwanda.cn
 - +.nike-shox.cn
@@ -133439,6 +133450,7 @@ payload:
 - +.ntp.org.cn
 - +.nubia.cn
 - +.nvidia.cn
+- +.nvsgames.cn
 - +.nwcdcloud.cn
 - +.nwcdcloud.com.cn
 - +.nwcddns.cn
@@ -133521,6 +133533,8 @@ payload:
 - +.phfund.com.cn
 - +.phira.cn
 - +.phoenixcenter.cn
+- +.phoenixmiles.cn
+- +.phoenixmiles.com.cn
 - +.php.cn
 - +.picpic-ai.cn
 - +.picself.cn
@@ -133619,6 +133633,7 @@ payload:
 - +.redcross.org.cn
 - +.redelight.cn
 - +.rednet.cn
+- +.registry.aliyuncs.com
 - +.reke.at.sohu.com
 - +.report.qqweb.qq.com
 - +.report.tencentmusic.com
