@@ -7,6 +7,7 @@ import os
 import logging
 import re
 import ipaddress
+import shutil
 from datetime import datetime
 from functools import lru_cache
 from typing import List, Dict, Optional, Any, Tuple, Union
@@ -47,7 +48,18 @@ CLASSICAL_TO_SB = {
 
 class RulesMerger:
     def __init__(self, config_path: str, max_workers: int = 10):
-        self.config = self._load_config(config_path)
+        raw_config = self._load_config(config_path)
+        # 兼容顶层为列表或包含 rulesets/push 的字典
+        if isinstance(raw_config, list):
+            self.rulesets = raw_config
+            self.push_config = {}
+        elif isinstance(raw_config, dict):
+            self.rulesets = raw_config.get('rulesets', [])
+            self.push_config = raw_config.get('push', {})
+        else:
+            self.rulesets = []
+            self.push_config = {}
+
         self.mihomo_path = MIHOMO_PATH
         self.sing_box_path = SING_BOX_PATH
         self.max_workers = max_workers
@@ -73,6 +85,11 @@ class RulesMerger:
             ('sing-box', 'ipcidr'): self._sing_box_to_ipcidr
         }
 
+        # 推送设置
+        self.push_enabled = self.push_config.get('enabled', True)
+        self.push_remote = self.push_config.get('remote', 'origin')
+        self.push_branch = self.push_config.get('branch', None)
+
     @staticmethod
     def _normalize_behavior(behavior: Optional[str]) -> str:
         if not behavior:
@@ -81,7 +98,7 @@ class RulesMerger:
         return 'sing-box' if b in ('singbox', 'sing-box') else b
 
     @staticmethod
-    def _load_config(path: str) -> dict:
+    def _load_config(path: str) -> Any:
         with open(path, 'r', encoding='utf-8') as f:
             return yaml.safe_load(f) or {}
 
@@ -642,7 +659,7 @@ class RulesMerger:
     # -------------------- 调度流程 --------------------
     def merge_rules(self) -> None:
         configs = [
-            cfg for cfg in self.config
+            cfg for cfg in self.rulesets
             if isinstance(cfg, dict) and 'upstream' in cfg and cfg.get('path')
         ]
         if not configs:
@@ -689,6 +706,8 @@ class RulesMerger:
                     logger.error(f"规则集处理抛出未捕获的异常: {e}")
 
         logger.info("全部规则集处理完毕。")
+        if self.push_enabled:
+            self._force_push()
 
     def _process_one_ruleset(self, cfg: Dict, source_cache: Dict) -> None:
         path = cfg['path']
@@ -920,7 +939,7 @@ class RulesMerger:
             return False
         return all(k in SING_BOX_LIST_FIELDS and all(isinstance(v, (str, int)) for v in self._as_list(v)) for k, v in rule.items())
 
-    # -------------------- 直接写入（无校验、无原子覆盖）--------------------
+    # -------------------- 写入与编译 --------------------
     def _prepare_rules_for_mrs(self, rules: List[Any], behavior: str) -> List[str]:
         cleaned = []
         for r in rules:
@@ -1030,6 +1049,37 @@ class RulesMerger:
         except Exception as e:
             logger.error(f"调用编译器 {bin_path} 异常: {e}")
             return False
+
+    # -------------------- Git 强制推送 --------------------
+    def _force_push(self) -> None:
+        """将输出目录强制推送到远程仓库"""
+        if not shutil.which('git'):
+            logger.error("未找到 git 命令，跳过推送")
+            return
+        try:
+            # 添加输出目录
+            subprocess.run(['git', 'add', self.output_dir], check=True, capture_output=True, text=True)
+            # 检查是否有变更
+            status = subprocess.run(
+                ['git', 'status', '--porcelain', self.output_dir],
+                capture_output=True, text=True, check=True
+            )
+            if not status.stdout.strip():
+                logger.info("规则文件无变更，跳过推送")
+                return
+            # 提交
+            commit_msg = f"Update rules {datetime.now():%Y-%m-%d %H:%M:%S}"
+            subprocess.run(['git', 'commit', '-m', commit_msg], check=True, capture_output=True, text=True)
+            # 强制推送
+            push_cmd = ['git', 'push', '--force', self.push_remote]
+            if self.push_branch:
+                push_cmd.append(self.push_branch)
+            push_result = subprocess.run(push_cmd, capture_output=True, text=True, check=True)
+            logger.info(f"推送成功: {push_result.stdout.strip()}")
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Git 操作失败: {e.stderr.strip() if e.stderr else e}")
+        except Exception as e:
+            logger.error(f"推送过程异常: {e}")
 
 def main():
     merger = RulesMerger('config.yaml', max_workers=10)
