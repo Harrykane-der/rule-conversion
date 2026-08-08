@@ -109,25 +109,22 @@ jobs:
           ls -lh rules/
 
 
-      # 强制覆盖当前分支规则并提交
-      - name: Commit and push rules
+      # 强制提交并覆盖当前分支
+      - name: Force commit and push rules
         run: |
           set -e
 
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # 生成时间戳，保证每次提交
-          date -u +"%Y-%m-%d %H:%M:%S UTC" > .rules_timestamp
+          git add -A rules/
 
-          # 添加规则和时间戳
-          git add -f rules/
-          git add -f .rules_timestamp
-
-          # 每次必定产生提交
+          # 无变化也提交
           git commit \
-            -m "🚀 Update rule sets $(date -u +'%Y-%m-%d %H:%M:%S')"
+            --allow-empty \
+            -m "🚀 Update rule sets $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
 
-          # 推送当前分支
+          # 强制覆盖当前分支
           git push \
+            --force \
             origin HEAD:${{ github.ref_name }}
